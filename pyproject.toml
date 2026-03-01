@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flowerapp"
+version = "1.0.0"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "jsonschema",
+    "jinja2",
+    "pydantic"
+]
+
+[project.scripts]
+flowerapp = "flowerapp.main:main"
