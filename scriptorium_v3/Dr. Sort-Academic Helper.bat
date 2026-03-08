@@ -5,15 +5,15 @@ cd /d "%~dp0"
 set "LOCAL_PYTHON=%~dp0.venv\Scripts\python.exe"
 
 if exist "%LOCAL_PYTHON%" (
-    "%LOCAL_PYTHON%" "%~dp0scriptorium_v3.py" %*
+    "%LOCAL_PYTHON%" "%~dp0dr_sort_academic_helper.py" %*
     exit /b %errorlevel%
 )
 
 where py >nul 2>nul
 if %errorlevel%==0 (
-    py "%~dp0scriptorium_v3.py" %*
+    py "%~dp0dr_sort_academic_helper.py" %*
     exit /b %errorlevel%
 )
 
-python "%~dp0scriptorium_v3.py" %*
+python "%~dp0dr_sort_academic_helper.py" %*
 exit /b %errorlevel%

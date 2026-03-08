@@ -1,6 +1,6 @@
-# Scriptorium.v3 Premium Spec
+# Agency LOTUS Premium Spec
 
-`Scriptorium.v3` is evolving from a safe document sorter into a high-end, local-first, content-aware archive application.
+`Agency LOTUS | Dr. Sort-Academic Helper` is evolving from a safe document sorter into a high-end, local-first, content-aware archive application.
 
 ## Core Product Direction
 

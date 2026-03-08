@@ -42,6 +42,11 @@ SORT_BY_OPTIONS = (
     "Destination",
 )
 
+APP_WINDOW_TITLE = "Agency LOTUS | Dr. Sort-Academic Helper"
+APP_HEADER_TITLE = "Agency LOTUS"
+APP_HEADER_SUBTITLE = "Dr. Sort-Academic Helper for academic, archive, and creative sorting."
+APP_DIALOG_TITLE = "Dr. Sort-Academic Helper"
+
 
 def summarize_counts(records: list[sorter.DocumentRecord]) -> tuple[Counter, Counter, Counter]:
     categories = Counter(record.category for record in records)
@@ -64,7 +69,7 @@ def parse_input_paths(raw_value: str) -> list[Path]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Scriptorium.v3 desktop app")
+    parser = argparse.ArgumentParser(description="Dr. Sort-Academic Helper desktop app")
     parser.add_argument("paths", nargs="*", help="Optional initial files or folders to scan.")
     parser.add_argument(
         "--self-test",
@@ -79,10 +84,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-class ScriptoriumApp(tk.Tk):
+class DrSortAcademicHelperApp(tk.Tk):
     def __init__(self, initial_paths: list[Path] | None = None) -> None:
         super().__init__()
-        self.title("Scriptorium.v3")
+        self.title(APP_WINDOW_TITLE)
         self.geometry("1540x920")
         self.minsize(1180, 720)
         self.configure(background=VIOLET_MIST)
@@ -227,10 +232,10 @@ class ScriptoriumApp(tk.Tk):
 
         header = ttk.Frame(root, style="Hero.TFrame", padding=(18, 16))
         header.pack(fill="x")
-        ttk.Label(header, text="Scriptorium.v3", style="Header.TLabel").pack(anchor="w")
+        ttk.Label(header, text=APP_HEADER_TITLE, style="Header.TLabel").pack(anchor="w")
         ttk.Label(
             header,
-            text="Scan files, extract metadata, preview renaming and sorting, then apply the plan.",
+            text=APP_HEADER_SUBTITLE,
             style="HeroSub.TLabel",
         ).pack(anchor="w", pady=(4, 0))
         ttk.Label(
@@ -609,7 +614,7 @@ class ScriptoriumApp(tk.Tk):
     def scan_selected_lotus(self) -> None:
         selected = self._selected_lotus_paths()
         if not selected:
-            messagebox.showinfo("Scriptorium.v3", "Select at least one LOTUS markdown or text file first.")
+            messagebox.showinfo(APP_DIALOG_TITLE, "Select at least one LOTUS markdown or text file first.")
             return
         self.current_sources = selected
         self.source_var.set(paths_to_text(self.current_sources))
@@ -632,7 +637,7 @@ class ScriptoriumApp(tk.Tk):
             return
         sources = self._resolve_sources()
         if not sources:
-            messagebox.showerror("Scriptorium.v3", "Choose at least one existing file or folder to scan.")
+            messagebox.showerror(APP_DIALOG_TITLE, "Choose at least one existing file or folder to scan.")
             return
         self.current_sources = sources
         self.current_records = []
@@ -649,12 +654,12 @@ class ScriptoriumApp(tk.Tk):
         if self.busy:
             return
         if not self.current_records:
-            messagebox.showinfo("Scriptorium.v3", "Scan files first so there is a plan to apply.")
+            messagebox.showinfo(APP_DIALOG_TITLE, "Scan files first so there is a plan to apply.")
             return
         mode = self.mode_var.get().strip().lower()
         if mode == "move":
             confirmed = messagebox.askyesno(
-                "Scriptorium.v3",
+                APP_DIALOG_TITLE,
                 "Move mode will remove files from the source location after sorting. Continue?",
             )
             if not confirmed:
@@ -667,7 +672,7 @@ class ScriptoriumApp(tk.Tk):
 
     def start_search(self) -> None:
         if not self.current_records:
-            messagebox.showinfo("Scriptorium.v3", "Scan files first so there is something to search.")
+            messagebox.showinfo(APP_DIALOG_TITLE, "Scan files first so there is something to search.")
             return
         query = self.search_var.get().strip()
         if not query:
@@ -691,7 +696,7 @@ class ScriptoriumApp(tk.Tk):
         if self.busy:
             return
         if not self.current_records:
-            messagebox.showinfo("Scriptorium.v3", "Scan files first so there is a record set to cross-reference.")
+            messagebox.showinfo(APP_DIALOG_TITLE, "Scan files first so there is a record set to cross-reference.")
             return
         self._set_busy(True)
         self.summary_var.set("Rendering the cross-reference report...")
@@ -703,7 +708,7 @@ class ScriptoriumApp(tk.Tk):
         if self.busy:
             return
         if not self.current_records:
-            messagebox.showinfo("Scriptorium.v3", "Scan files first so there is a record set for the masterlist.")
+            messagebox.showinfo(APP_DIALOG_TITLE, "Scan files first so there is a record set for the masterlist.")
             return
         self._set_busy(True)
         self.summary_var.set("Rendering the masterlist...")
@@ -715,9 +720,9 @@ class ScriptoriumApp(tk.Tk):
         if self.busy:
             return
         if not self.last_applied_actions:
-            messagebox.showinfo("Scriptorium.v3", "There is no completed sort action to undo yet.")
+            messagebox.showinfo(APP_DIALOG_TITLE, "There is no completed sort action to undo yet.")
             return
-        confirmed = messagebox.askyesno("Scriptorium.v3", "Undo the last completed sort action?")
+        confirmed = messagebox.askyesno(APP_DIALOG_TITLE, "Undo the last completed sort action?")
         if not confirmed:
             return
         self._set_busy(True)
@@ -922,7 +927,7 @@ class ScriptoriumApp(tk.Tk):
                     self._set_busy(False)
                     self.status_var.set("A processing error occurred.")
                     self._append_log(str(payload))
-                    messagebox.showerror("Scriptorium.v3", str(payload))
+                    messagebox.showerror(APP_DIALOG_TITLE, str(payload))
         except queue.Empty:
             pass
         self.after(200, self._poll_worker_queue)
@@ -1253,7 +1258,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     args = build_parser().parse_args(argv)
     initial_paths = [Path(argument).expanduser().resolve() for argument in args.paths if Path(argument).expanduser().exists()]
-    app = ScriptoriumApp(initial_paths=initial_paths)
+    app = DrSortAcademicHelperApp(initial_paths=initial_paths)
     if args.self_test:
         app.update_idletasks()
         print(

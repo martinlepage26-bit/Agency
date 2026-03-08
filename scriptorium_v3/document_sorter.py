@@ -74,7 +74,7 @@ REFERENCE_STOPWORDS = {
     "report",
     "chapter",
 }
-RULES_EXAMPLE_NAME = "scriptorium_rules.example.txt"
+RULES_EXAMPLE_NAME = "agency_lotus_rules.example.txt"
 REVISION_SENSITIVE_TYPES = {
     "cover_letter",
     "job_application",

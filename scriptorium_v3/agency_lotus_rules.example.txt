@@ -1,4 +1,4 @@
-# Scriptorium.v3 plain-English rules
+# Agency LOTUS / Dr. Sort-Academic Helper plain-English rules
 # Supported forms:
 # move all files containing "phrase" to CATEGORY/doc_type
 # tag all files containing "phrase" with tag1, tag2
