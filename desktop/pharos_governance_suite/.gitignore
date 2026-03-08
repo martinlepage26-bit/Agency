@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+lotus_dr_sort/.venv/
+lotus_dr_sort/LOGS/
+lotus_dr_sort/REPORTS_V2/
+lotus_dr_sort/SORTED_LIBRARY_V2/
+lotus_dr_sort/QUARANTINE/
+lotus_dr_sort/PDF RENAMED/
+lotus_dr_sort/TEST_*/
+lotus_dr_sort/LOTUS_UPLOADS/*
+!lotus_dr_sort/LOTUS_UPLOADS/.gitkeep
+lotus_dr_sort/INBOX/*
+!lotus_dr_sort/INBOX/.gitkeep
+
+compass_ai/chrome_headless_tmp/

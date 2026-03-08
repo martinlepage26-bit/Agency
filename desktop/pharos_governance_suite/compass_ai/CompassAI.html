@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CompassAI</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+    :root {
+      --indigo: #120e18;
+      --indigo-soft: #1a1530;
+      --terracotta: #b76046;
+      --ochre: #c98a2e;
+      --sand: #120e18;
+      --surface: #221c31;
+      --surface-strong: #2a223b;
+      --ink: #f1e7d8;
+      --muted: #baa891;
+      --muted-light: #907b65;
+      --line: rgba(201, 138, 46, 0.16);
+      --teal: #8e80be;
+      --danger: #91473b;
+      --shadow: rgba(5, 3, 10, 0.26);
+      --glow: rgba(201, 138, 46, 0.16);
+      --glow-secondary: rgba(142, 128, 190, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 12% 9%, rgba(201, 138, 46, 0.1) 0%, rgba(201, 138, 46, 0) 24%),
+        radial-gradient(circle at 84% 11%, rgba(142, 128, 190, 0.14) 0%, rgba(142, 128, 190, 0) 18%),
+        radial-gradient(circle at 56% 84%, rgba(183, 96, 70, 0.1) 0%, rgba(183, 96, 70, 0) 22%),
+        linear-gradient(180deg, #120e18 0%, #171123 100%);
+      color: var(--ink);
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(rgba(142, 128, 190, 0.038) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(201, 138, 46, 0.032) 1px, transparent 1px);
+      background-size: 30px 30px;
+      mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%);
+    }
+
+    .shell {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 30px 28px 34px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 30px 32px;
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at 78% 22%, rgba(142, 128, 190, 0.18) 0%, rgba(142, 128, 190, 0) 24%),
+        radial-gradient(circle at 18% 82%, rgba(183, 96, 70, 0.16) 0%, rgba(183, 96, 70, 0) 20%),
+        radial-gradient(circle at 56% 34%, rgba(201, 138, 46, 0.09) 0%, rgba(201, 138, 46, 0) 30%),
+        linear-gradient(180deg, #120e18 0%, #181225 100%);
+      border: 1px solid rgba(201, 138, 46, 0.16);
+      color: var(--ink);
+      box-shadow: 0 10px 24px rgba(5, 3, 10, 0.22);
+      margin-bottom: 20px;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      top: -140px;
+      right: -90px;
+      background: radial-gradient(circle, rgba(142, 128, 190, 0.22) 0%, transparent 72%);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 11px;
+      font-family: "IBM Plex Mono", "Consolas", monospace;
+      font-weight: 600;
+      color: var(--ochre);
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "Crimson Text", Georgia, serif;
+      font-size: clamp(2rem, 3vw, 3rem);
+      line-height: 1.05;
+      letter-spacing: -0.035em;
+      text-shadow: 0 0 18px rgba(142, 128, 190, 0.18), 0 0 30px rgba(183, 96, 70, 0.1);
+    }
+
+    .hero p {
+      max-width: 900px;
+      margin: 12px 0 0;
+      color: rgba(241, 231, 216, 0.82);
+      font-size: 1rem;
+      line-height: 1.75;
+    }
+
+    .hero-band {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .hero-stat {
+      border: 1px solid rgba(229, 206, 165, 0.16);
+      border-radius: 16px;
+      padding: 14px 15px;
+      background: rgba(142, 128, 190, 0.08);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-stat-label {
+      display: block;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ochre);
+      margin-bottom: 6px;
+    }
+
+    .hero-stat strong {
+      display: block;
+      font-size: 0.98rem;
+      line-height: 1.45;
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(420px, 1fr) minmax(390px, 1.02fr);
+      gap: 20px;
+    }
+
+    .panel {
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(34, 28, 49, 0.98), rgba(26, 21, 48, 0.94));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px;
+      box-shadow: 0 18px 34px var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .panel-head {
+      margin-bottom: 18px;
+      position: relative;
+      padding-bottom: 14px;
+    }
+
+    .panel-head::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 120px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(201, 138, 46, 0.9), rgba(201, 138, 46, 0));
+    }
+
+    .panel h2 {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Crimson Text", Georgia, serif;
+      font-size: 1.65rem;
+    }
+
+    .panel-lead {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 58ch;
+    }
+
+    .section {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 17px 16px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      margin-bottom: 15px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .section::before {
+      content: "";
+      position: absolute;
+      top: 18px;
+      bottom: 18px;
+      left: 0;
+      width: 3px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(201, 138, 46, 0.9), rgba(142, 128, 190, 0.4));
+    }
+
+    .section-title {
+      margin: 0 0 10px;
+      color: var(--ochre);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.72rem;
+      font-family: "IBM Plex Mono", "Consolas", monospace;
+      font-weight: 700;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 13px;
+      font: inherit;
+      color: var(--ink);
+      background: rgba(26, 21, 48, 0.92);
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--ochre);
+      box-shadow: 0 0 0 4px rgba(201, 138, 46, 0.12);
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 13px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 0.9rem;
+      color: var(--ink);
+      transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .chip:hover {
+      transform: translateY(-1px);
+      border-color: rgba(179, 139, 60, 0.58);
+    }
+
+    .chip:has(input:checked) {
+      border-color: rgba(179, 139, 60, 0.9);
+      background: linear-gradient(180deg, rgba(42, 34, 59, 0.98), rgba(34, 28, 49, 0.98));
+      box-shadow: 0 10px 20px rgba(201, 138, 46, 0.14);
+    }
+
+    .chip input {
+      width: auto;
+      margin: 0;
+      accent-color: var(--terracotta);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(205, 179, 146, 0.45);
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 17px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--terracotta) 0%, var(--ochre) 100%);
+      color: #170f0a;
+      border: 1px solid rgba(201, 138, 46, 0.28);
+      box-shadow: 0 10px 20px rgba(12, 8, 4, 0.18), inset 0 0 8px rgba(255, 255, 255, 0.06);
+    }
+
+    .secondary {
+      background: linear-gradient(135deg, #1a1530 0%, #21192d 100%);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 22px rgba(6, 4, 12, 0.24);
+    }
+
+    .utility {
+      background: rgba(142, 128, 190, 0.05);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 18px rgba(48, 38, 29, 0.05);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .metric-card {
+      position: relative;
+      padding: 18px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(42,34,59,0.98), rgba(34,28,49,0.94));
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .metric-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 18px;
+      right: 18px;
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--ochre), rgba(229, 206, 165, 0));
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: "IBM Plex Mono", "Consolas", monospace;
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-family: "Crimson Text", Georgia, serif;
+      font-size: 1.8rem;
+      color: var(--ink);
+    }
+
+    .tier-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 74px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+    }
+
+    .tier-T0 { background: rgba(58, 125, 121, 0.16); color: var(--teal); }
+    .tier-T1 { background: rgba(158, 116, 32, 0.16); color: var(--ochre); }
+    .tier-T2 { background: rgba(180, 93, 67, 0.16); color: var(--terracotta); }
+    .tier-T3 { background: rgba(158, 60, 54, 0.16); color: var(--danger); }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .result-card {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      min-height: 180px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .result-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 16px;
+      right: 16px;
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(47, 109, 103, 0.9), rgba(47, 109, 103, 0));
+    }
+
+    .result-card h3 {
+      margin: 0 0 10px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.05rem;
+      color: var(--ink);
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      line-height: 1.55;
+    }
+
+    .report {
+      background: linear-gradient(180deg, #1a1530, #120e18);
+      color: #f8ecdc;
+      border: 1px solid rgba(201, 138, 46, 0.18);
+      border-radius: 20px;
+      padding: 18px;
+      white-space: pre-wrap;
+      font-family: "IBM Plex Mono", "Cascadia Code", "Consolas", monospace;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      min-height: 260px;
+      overflow: auto;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .hint {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 1120px) {
+      .grid,
+      .results-grid,
+      .row,
+      .metrics,
+      .hero-band {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <p class="eyebrow">Executive Governance Desktop</p>
+      <h1>CompassAI</h1>
+      <p>
+        Local governance intake and risk-tiering workspace for delegated-action systems. This desktop surface is designed as an
+        executive review room: sensitivity, automation, regulatory exposure, uncertainty, and evidence readiness are translated
+        into a concise T0-T3 position with control expectations, deliverables, and re-tiering triggers.
+      </p>
+      <div class="hero-band">
+        <div class="hero-stat">
+          <span class="hero-stat-label">Decision Lens</span>
+          <strong>Authority, automation, evidence sufficiency, and escalation exposure.</strong>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-label">Output</span>
+          <strong>Risk tier, control stack, governance paperwork, and re-tiering triggers.</strong>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-label">Mode</span>
+          <strong>Local desktop assessment with export-ready governance notes and board-ready summaries.</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Governance Intake Record</h2>
+          <p class="panel-lead">Capture the operating context with enough precision to judge sensitivity, oversight burden, escalation exposure, and delegated-action risk.</p>
+        </div>
+
+        <div class="section">
+          <p class="section-title">Core Record</p>
+          <label for="purpose">Use case purpose</label>
+          <textarea id="purpose" placeholder="Describe what this system does, what authority it holds, and what it can change or decide."></textarea>
+
+          <div class="row" style="margin-top: 12px;">
+            <div>
+              <label for="business-owner-name">Business owner</label>
+              <input id="business-owner-name" placeholder="Owner name">
+            </div>
+            <div>
+              <label for="business-owner-email">Business owner email</label>
+              <input id="business-owner-email" placeholder="owner@example.com">
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 12px;">
+            <div>
+              <label for="model-owner-name">Model owner</label>
+              <input id="model-owner-name" placeholder="Model owner or lead">
+            </div>
+            <div>
+              <label for="risk-owner-name">Risk owner</label>
+              <input id="risk-owner-name" placeholder="Risk owner">
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="section-title">System Context</p>
+          <div class="row">
+            <div>
+              <label for="systems">Systems involved</label>
+              <input id="systems" placeholder="CRM, document vault, case API">
+            </div>
+            <div>
+              <label for="automation-level">Automation level</label>
+              <select id="automation-level">
+                <option value="informative">Informative</option>
+                <option value="assistive" selected>Assistive</option>
+                <option value="automated">Automated</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 12px;">
+            <div>
+              <label for="regulated-domain">Regulated domain</label>
+              <select id="regulated-domain">
+                <option value="false" selected>No</option>
+                <option value="true">Yes</option>
+              </select>
+            </div>
+            <div>
+              <label for="domain-type">Domain type</label>
+              <input id="domain-type" placeholder="Banking, health, procurement">
+            </div>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <label for="evidence-count">Evidence packs ingested</label>
+            <input id="evidence-count" type="number" min="0" step="1" value="0">
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="section-title">Data Sensitivity</p>
+          <div class="chips" id="data-category-group"></div>
+          <p class="hint">Sensitive categories drive the strongest tier jumps, especially when combined with automation and regulated use.</p>
+        </div>
+
+        <div class="section">
+          <p class="section-title">Known Unknowns</p>
+          <label for="unknowns">Uncertainties, unresolved questions, or untested assumptions</label>
+          <textarea id="unknowns" placeholder="One per line. Example: unclear appeal process for escalated customer harm."></textarea>
+        </div>
+
+        <div class="actions">
+          <button class="primary" id="calculate-btn">Calculate Risk Tier</button>
+          <button class="secondary" id="example-btn" type="button">Load Example</button>
+          <button class="utility" id="markdown-btn" type="button">Export Markdown</button>
+          <button class="utility" id="json-btn" type="button">Export JSON</button>
+          <button class="utility" id="reset-btn" type="button">Reset</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Boardroom Assessment Output</h2>
+          <p class="panel-lead">Review the tier calculation, inspect the rationale behind it, and export a polished governance brief immediately.</p>
+        </div>
+
+        <div class="metrics">
+          <div class="metric-card">
+            <div class="metric-label">Risk Tier</div>
+            <div class="metric-value"><span class="tier-pill tier-T1" id="tier-pill">T1</span></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Composite Score</div>
+            <div class="metric-value" id="score-value">25</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Controls Required</div>
+            <div class="metric-value" id="control-count">6</div>
+          </div>
+        </div>
+
+        <div class="results-grid">
+          <div class="result-card">
+            <h3>Rationale</h3>
+            <ul id="rationale-list"></ul>
+          </div>
+          <div class="result-card">
+            <h3>Uncertainties</h3>
+            <ul id="uncertainty-list"></ul>
+          </div>
+          <div class="result-card">
+            <h3>Re-tiering Triggers</h3>
+            <ul id="trigger-list"></ul>
+          </div>
+          <div class="result-card">
+            <h3>Required Deliverables</h3>
+            <ul id="deliverable-list"></ul>
+          </div>
+        </div>
+
+        <div class="result-card" style="min-height: 220px; margin-bottom: 14px;">
+          <h3>Required Controls</h3>
+          <ul id="control-list"></ul>
+        </div>
+
+        <div class="result-card" style="min-height: 320px;">
+          <h3>Report Preview</h3>
+          <div class="report" id="report-output"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "compass_ai_desktop_state_v1";
+    const DATA_OPTIONS = ["PII", "PHI", "Financial", "Biometrics", "Child Data", "Contracts", "HR", "Operations", "Public Content"];
+    const CONTROL_CATALOG = [
+      { id: "CTL-001", name: "RBAC", category: "security", tiers: ["T0", "T1", "T2", "T3"] },
+      { id: "CTL-002", name: "AuditTrail", category: "security", tiers: ["T0", "T1", "T2", "T3"] },
+      { id: "CTL-003", name: "HITL_LowConfidence", category: "human_oversight", tiers: ["T1", "T2", "T3"] },
+      { id: "CTL-004", name: "PII_Masking", category: "data", tiers: ["T1", "T2", "T3"] },
+      { id: "CTL-005", name: "DataMinimization", category: "data", tiers: ["T1", "T2", "T3"] },
+      { id: "CTL-006", name: "DeploymentGates", category: "process", tiers: ["T2", "T3"] },
+      { id: "CTL-007", name: "ChangeControl", category: "process", tiers: ["T2", "T3"] },
+      { id: "CTL-008", name: "RedTeaming", category: "quality", tiers: ["T3"] },
+      { id: "CTL-009", name: "IncidentPlaybook", category: "incident", tiers: ["T2", "T3"] },
+      { id: "CTL-010", name: "DriftMonitoring", category: "monitoring", tiers: ["T2", "T3"] },
+      { id: "CTL-011", name: "DualValidation", category: "human_oversight", tiers: ["T3"] },
+      { id: "CTL-012", name: "Encryption", category: "security", tiers: ["T1", "T2", "T3"] }
+    ];
+    const DELIVERABLE_MAP = {
+      T0: ["usecase_record"],
+      T1: ["usecase_record", "system_card", "monitoring_plan"],
+      T2: ["usecase_record", "system_card", "risk_assessment", "monitoring_plan"],
+      T3: ["usecase_record", "system_card", "risk_assessment", "dpia", "monitoring_plan", "approval_record"]
+    };
+
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
+    function renderCategoryChips() {
+      const group = byId("data-category-group");
+      group.innerHTML = "";
+      DATA_OPTIONS.forEach((label) => {
+        const chip = document.createElement("label");
+        chip.className = "chip";
+        chip.innerHTML = `<input type="checkbox" value="${label}"><span>${label}</span>`;
+        group.appendChild(chip);
+      });
+    }
+
+    function parseLines(value) {
+      return value
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    }
+
+    function parseCommaList(value) {
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function readState() {
+      return {
+        purpose: byId("purpose").value.trim(),
+        businessOwnerName: byId("business-owner-name").value.trim(),
+        businessOwnerEmail: byId("business-owner-email").value.trim(),
+        modelOwnerName: byId("model-owner-name").value.trim(),
+        riskOwnerName: byId("risk-owner-name").value.trim(),
+        systemsInvolved: parseCommaList(byId("systems").value),
+        dataCategories: Array.from(document.querySelectorAll("#data-category-group input:checked")).map((node) => node.value),
+        automationLevel: byId("automation-level").value,
+        regulatedDomain: byId("regulated-domain").value === "true",
+        domainType: byId("domain-type").value.trim(),
+        knownUnknowns: parseLines(byId("unknowns").value),
+        evidenceCount: Number.parseInt(byId("evidence-count").value || "0", 10) || 0
+      };
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(readState()));
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      try {
+        const state = JSON.parse(raw);
+        byId("purpose").value = state.purpose || "";
+        byId("business-owner-name").value = state.businessOwnerName || "";
+        byId("business-owner-email").value = state.businessOwnerEmail || "";
+        byId("model-owner-name").value = state.modelOwnerName || "";
+        byId("risk-owner-name").value = state.riskOwnerName || "";
+        byId("systems").value = (state.systemsInvolved || []).join(", ");
+        byId("automation-level").value = state.automationLevel || "assistive";
+        byId("regulated-domain").value = String(Boolean(state.regulatedDomain));
+        byId("domain-type").value = state.domainType || "";
+        byId("unknowns").value = (state.knownUnknowns || []).join("\n");
+        byId("evidence-count").value = String(state.evidenceCount || 0);
+        const selected = new Set(state.dataCategories || []);
+        document.querySelectorAll("#data-category-group input").forEach((node) => {
+          node.checked = selected.has(node.value);
+        });
+      } catch (_error) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+
+    function calculateRiskTier(usecase) {
+      let score = 0;
+      const rationale = [];
+      const uncertainties = [];
+      const triggers = [];
+
+      const sensitiveData = ["PII", "PHI", "Financial", "Biometrics", "Child Data"];
+      const foundSensitive = usecase.dataCategories.filter((item) => sensitiveData.includes(item));
+      if (foundSensitive.length > 0) {
+        score += foundSensitive.length * 15;
+        rationale.push(`Sensitive data categories: ${foundSensitive.join(", ")}`);
+      }
+
+      if (usecase.automationLevel === "automated") {
+        score += 30;
+        rationale.push("Fully automated decision-making increases risk");
+      } else if (usecase.automationLevel === "assistive") {
+        score += 15;
+        rationale.push("Assistive automation with human oversight");
+      }
+
+      if (usecase.regulatedDomain) {
+        score += 25;
+        rationale.push(`Operates in regulated domain: ${usecase.domainType || "unspecified"}`);
+        triggers.push("Regulatory change in domain");
+      }
+
+      if (usecase.knownUnknowns.length > 0) {
+        uncertainties.push(...usecase.knownUnknowns);
+        score += usecase.knownUnknowns.length * 5;
+        rationale.push(`${usecase.knownUnknowns.length} known unknowns increase uncertainty`);
+      }
+
+      if (usecase.evidenceCount === 0) {
+        uncertainties.push("No evidence packs ingested - assessment based on intake only");
+        score += 10;
+      }
+
+      let tier = "T0";
+      if (score >= 70) {
+        tier = "T3";
+      } else if (score >= 45) {
+        tier = "T2";
+      } else if (score >= 20) {
+        tier = "T1";
+      }
+
+      const requiredControls = CONTROL_CATALOG.filter((control) => control.tiers.includes(tier));
+      const requiredDeliverables = DELIVERABLE_MAP[tier] || [];
+
+      triggers.push(
+        "Change in automation level",
+        "New data categories added",
+        "Deployment to new region",
+        "Model or pipeline version change"
+      );
+
+      return {
+        score,
+        tier,
+        rationale,
+        uncertainties,
+        triggers,
+        requiredControls,
+        requiredDeliverables
+      };
+    }
+
+    function buildMarkdown(usecase, result) {
+      const title = usecase.purpose || "CompassAI desktop assessment";
+      return [
+        `# CompassAI Assessment`,
+        ``,
+        `## Use Case`,
+        `- Purpose: ${title}`,
+        `- Business Owner: ${usecase.businessOwnerName || "Not provided"}${usecase.businessOwnerEmail ? ` (${usecase.businessOwnerEmail})` : ""}`,
+        `- Model Owner: ${usecase.modelOwnerName || "Not provided"}`,
+        `- Risk Owner: ${usecase.riskOwnerName || "Not provided"}`,
+        `- Systems Involved: ${usecase.systemsInvolved.length ? usecase.systemsInvolved.join(", ") : "None specified"}`,
+        `- Data Categories: ${usecase.dataCategories.length ? usecase.dataCategories.join(", ") : "None specified"}`,
+        `- Automation Level: ${usecase.automationLevel}`,
+        `- Regulated Domain: ${usecase.regulatedDomain ? `Yes - ${usecase.domainType || "unspecified"}` : "No"}`,
+        `- Evidence Count: ${usecase.evidenceCount}`,
+        ``,
+        `## Assessment Summary`,
+        `- Risk Tier: ${result.tier}`,
+        `- Composite Score: ${result.score}`,
+        ``,
+        `## Rationale`,
+        ...(result.rationale.length ? result.rationale.map((item) => `- ${item}`) : ["- No explicit rationale captured"]),
+        ``,
+        `## Uncertainties`,
+        ...(result.uncertainties.length ? result.uncertainties.map((item) => `- ${item}`) : ["- None identified"]),
+        ``,
+        `## Re-tiering Triggers`,
+        ...result.triggers.map((item) => `- ${item}`),
+        ``,
+        `## Required Controls`,
+        ...result.requiredControls.map((control) => `- ${control.name} (${control.category})`),
+        ``,
+        `## Required Deliverables`,
+        ...result.requiredDeliverables.map((item) => `- ${item.replaceAll("_", " ")}`),
+        ``,
+        `---`,
+        `Generated locally by CompassAI Desktop`
+      ].join("\n");
+    }
+
+    function setList(targetId, items) {
+      const target = byId(targetId);
+      target.innerHTML = "";
+      (items.length ? items : ["None"]).forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        target.appendChild(li);
+      });
+    }
+
+    function renderResult(usecase, result) {
+      byId("tier-pill").textContent = result.tier;
+      byId("tier-pill").className = `tier-pill tier-${result.tier}`;
+      byId("score-value").textContent = String(result.score);
+      byId("control-count").textContent = String(result.requiredControls.length);
+      setList("rationale-list", result.rationale);
+      setList("uncertainty-list", result.uncertainties);
+      setList("trigger-list", result.triggers);
+      setList("deliverable-list", result.requiredDeliverables.map((item) => item.replaceAll("_", " ")));
+      setList("control-list", result.requiredControls.map((control) => `${control.name} (${control.category})`));
+      byId("report-output").textContent = buildMarkdown(usecase, result);
+    }
+
+    function calculateAndRender() {
+      const state = readState();
+      const result = calculateRiskTier(state);
+      renderResult(state, result);
+      saveState();
+      return { state, result };
+    }
+
+    function downloadText(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function loadExample() {
+      byId("purpose").value = "Agentic procurement assistant that triages supplier submissions, summarizes due diligence, and drafts routing recommendations for human approval.";
+      byId("business-owner-name").value = "Martin Lepage";
+      byId("business-owner-email").value = "consult@govern-ai.ca";
+      byId("model-owner-name").value = "Platform Governance Lead";
+      byId("risk-owner-name").value = "Head of Procurement Risk";
+      byId("systems").value = "Vendor portal, procurement queue, contract repository, approval ledger";
+      byId("automation-level").value = "assistive";
+      byId("regulated-domain").value = "true";
+      byId("domain-type").value = "Public procurement";
+      byId("evidence-count").value = "2";
+      byId("unknowns").value = "Escalation threshold for supplier harm is still being tuned.\nNeed clearer replay view for rejected supplier decisions.";
+      const selected = new Set(["PII", "Financial", "Contracts"]);
+      document.querySelectorAll("#data-category-group input").forEach((node) => {
+        node.checked = selected.has(node.value);
+      });
+      calculateAndRender();
+    }
+
+    function resetForm() {
+      document.querySelectorAll("input, textarea, select").forEach((node) => {
+        if (node.type === "checkbox") {
+          node.checked = false;
+        } else if (node.id === "automation-level") {
+          node.value = "assistive";
+        } else if (node.id === "regulated-domain") {
+          node.value = "false";
+        } else if (node.id === "evidence-count") {
+          node.value = "0";
+        } else {
+          node.value = "";
+        }
+      });
+      localStorage.removeItem(STORAGE_KEY);
+      calculateAndRender();
+    }
+
+    renderCategoryChips();
+    loadState();
+    calculateAndRender();
+
+    document.querySelectorAll("input, textarea, select").forEach((node) => {
+      node.addEventListener("change", calculateAndRender);
+      node.addEventListener("input", saveState);
+    });
+
+    byId("calculate-btn").addEventListener("click", calculateAndRender);
+    byId("example-btn").addEventListener("click", loadExample);
+    byId("reset-btn").addEventListener("click", resetForm);
+    byId("markdown-btn").addEventListener("click", () => {
+      const { state, result } = calculateAndRender();
+      downloadText("CompassAI_Assessment.md", buildMarkdown(state, result), "text/markdown;charset=utf-8");
+    });
+    byId("json-btn").addEventListener("click", () => {
+      const { state, result } = calculateAndRender();
+      downloadText(
+        "CompassAI_Assessment.json",
+        JSON.stringify({ usecase: state, assessment: result }, null, 2),
+        "application/json;charset=utf-8"
+      );
+    });
+  </script>
+</body>
+</html>
