@@ -141,6 +141,9 @@ class DrSortAcademicHelperApp(tk.Tk):
             value="Choose a source, run a scan, review the proposed ledger carefully, then apply the sort when the plan looks right."
         )
 
+        self.sorted_summary_var = tk.StringVar(value="Sorted documents will appear here after you run Sort.")
+        self.sorted_records: list[sorter.DocumentRecord] = []
+
         self.current_sources: list[Path] = default_sources
         self.current_records: list[sorter.DocumentRecord] = []
         self.lotus_notes: list[lotus.LotusNote] = []
@@ -559,6 +562,9 @@ class DrSortAcademicHelperApp(tk.Tk):
         notebook.add(summary_text_frame, text="Report Summary")
         notebook.add(log_frame, text="Activity")
         notebook.add(lotus_frame, text="LOTUS")
+        sorted_frame = ttk.Frame(notebook)
+        notebook.add(sorted_frame, text="Sorted Documents")
+        self._build_sorted_tab(sorted_frame)
 
         self.report_text = tk.Text(
             summary_text_frame,
@@ -824,6 +830,69 @@ class DrSortAcademicHelperApp(tk.Tk):
         self.lotus_preview_text.delete("1.0", "end")
         self.lotus_preview_text.insert("1.0", value)
         self.lotus_preview_text.configure(state="disabled")
+
+    def _build_sorted_tab(self, parent: ttk.Frame) -> None:
+        header = ttk.Frame(parent)
+        header.pack(fill="x", pady=(0, 8))
+        ttk.Label(header, text="SORTED DOCUMENTS VIEWER", style="Ledger.TLabel").pack(anchor="w")
+        ttk.Label(header, textvariable=self.sorted_summary_var, style="WarmMuted.TLabel", wraplength=1160, justify="left").pack(anchor="w")
+
+        viewer_frame = ttk.Frame(parent)
+        viewer_frame.pack(fill="both", expand=True)
+
+        table_frame = ttk.Frame(viewer_frame, style="Card.TFrame", padding=(10, 10, 10, 6))
+        table_frame.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        columns = ("source", "action", "destination", "category", "doc_type", "modified")
+        self.sorted_tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
+        self.sorted_tree.heading("source", text="Source file")
+        self.sorted_tree.heading("action", text="Action")
+        self.sorted_tree.heading("destination", text="Destination")
+        self.sorted_tree.heading("category", text="Category")
+        self.sorted_tree.heading("doc_type", text="Type")
+        self.sorted_tree.heading("modified", text="Modified")
+        self.sorted_tree.column("source", width=260, stretch=True)
+        self.sorted_tree.column("action", width=90, stretch=False, anchor="center")
+        self.sorted_tree.column("destination", width=340, stretch=True)
+        self.sorted_tree.column("category", width=140, stretch=False)
+        self.sorted_tree.column("doc_type", width=130, stretch=False)
+        self.sorted_tree.column("modified", width=110, stretch=False)
+        self.sorted_tree.bind("<<TreeviewSelect>>", self._on_sorted_selected)
+        y_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.sorted_tree.yview)
+        x_scroll = ttk.Scrollbar(table_frame, orient="horizontal", command=self.sorted_tree.xview)
+        self.sorted_tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+        self.sorted_tree.grid(row=1, column=0, sticky="nsew")
+        y_scroll.grid(row=1, column=1, sticky="ns")
+        x_scroll.grid(row=2, column=0, sticky="ew")
+        table_frame.rowconfigure(1, weight=1)
+        table_frame.columnconfigure(0, weight=1)
+        for tag, color in (
+            ("UNCLEAR", "#31263A"),
+            ("SCHOLAR", "#271F38"),
+            ("PERSONAL_ADMIN", "#342328"),
+            ("PROFESSIONAL", "#241F2F"),
+            ("CREATIVE", "#2E2236"),
+        ):
+            self.sorted_tree.tag_configure(tag, background=color)
+
+        preview_frame = ttk.Frame(viewer_frame, style="Card.TFrame", padding=(12, 12))
+        preview_frame.pack(side="right", fill="both", expand=True)
+        ttk.Label(preview_frame, text="Document details", style="CardSection.TLabel").pack(anchor="w")
+        self.sorted_preview_text = tk.Text(
+            preview_frame,
+            wrap="word",
+            bg=SURFACE,
+            fg=INK,
+            insertbackground=MUTED_GOLD,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=TREE_BORDER,
+            highlightcolor=TEAL,
+        )
+        preview_scroll = ttk.Scrollbar(preview_frame, orient="vertical", command=self.sorted_preview_text.yview)
+        preview_scroll.pack(side="right", fill="y")
+        self.sorted_preview_text.configure(yscrollcommand=preview_scroll.set)
+        self.sorted_preview_text.pack(fill="both", expand=True, pady=(8, 0))
+        self._set_sorted_preview("No sorted documents yet. Run Sort to populate this viewer.")
 
     def choose_rules_file(self) -> None:
         chosen = filedialog.askopenfilename(
@@ -1174,6 +1243,7 @@ class DrSortAcademicHelperApp(tk.Tk):
         )
         self.status_var.set(f"Scan complete. {len(records)} document(s) evaluated.")
         self._set_report_text(summary)
+        self._refresh_sorted_viewer([])
         self.monitor_snapshot = self._source_snapshot()
         self._set_busy(False)
 
@@ -1207,6 +1277,7 @@ class DrSortAcademicHelperApp(tk.Tk):
         )
         self.status_var.set("Sorting complete.")
         self._set_report_text(summary)
+        self._refresh_sorted_viewer(records)
         self._set_busy(False)
 
     def _finish_cross_reference(self, payload: dict[str, object]) -> None:
@@ -1254,6 +1325,7 @@ class DrSortAcademicHelperApp(tk.Tk):
         self.summary_var.set(f"Undo complete. Reverted {undone} action(s).")
         self.status_var.set("Undo complete.")
         self._append_log(f"Undo complete: {undone} action(s) reverted.")
+        self._refresh_sorted_viewer([])
         self._set_busy(False)
 
     def _build_summary_text(
@@ -1328,6 +1400,77 @@ class DrSortAcademicHelperApp(tk.Tk):
         self.report_text.delete("1.0", "end")
         self.report_text.insert("1.0", value)
         self.report_text.configure(state="disabled")
+
+    def _refresh_sorted_viewer(self, records: list[sorter.DocumentRecord] | None = None) -> None:
+        if not hasattr(self, "sorted_tree"):
+            return
+        if records is None:
+            records = [
+                record
+                for record in self.current_records
+                if record.action in {"COPIED", "MOVED"} and record.planned_destination
+            ]
+        self.sorted_records = list(records)
+        for item in self.sorted_tree.get_children():
+            self.sorted_tree.delete(item)
+        for record in self.sorted_records:
+            values = (
+                record.relative_source,
+                record.action,
+                str(record.planned_destination or ""),
+                record.category,
+                record.doc_type,
+                record.modified_iso,
+            )
+            tag = record.category or ""
+            if tag:
+                self.sorted_tree.insert("", "end", values=values, tags=(tag,))
+            else:
+                self.sorted_tree.insert("", "end", values=values)
+        if self.sorted_records:
+            first_item = self.sorted_tree.get_children()[0]
+            self.sorted_tree.selection_set(first_item)
+            self.sorted_tree.focus(first_item)
+            self._show_sorted_document(self.sorted_records[0])
+            last_action = self.sorted_records[-1].action
+            self.sorted_summary_var.set(f"{len(self.sorted_records)} sorted document(s). Last action: {last_action}.")
+        else:
+            self.sorted_summary_var.set("Sorted documents will appear here after you run Sort.")
+            self._set_sorted_preview("No sorted documents yet. Run Sort to populate this viewer.")
+
+    def _on_sorted_selected(self, _event: object) -> None:
+        selection = self.sorted_tree.selection()
+        if not selection:
+            return
+        index = self.sorted_tree.index(selection[0])
+        if 0 <= index < len(self.sorted_records):
+            self._show_sorted_document(self.sorted_records[index])
+
+    def _show_sorted_document(self, record: sorter.DocumentRecord) -> None:
+        authors = ", ".join(record.authors) if record.authors else "unknown"
+        tags = ", ".join(record.tags) if record.tags else "none"
+        reasoning = "; ".join(record.reasoning) if record.reasoning else "none"
+        preview = [
+            f"Title: {record.title or record.source_path.name}",
+            f"Authors: {authors}",
+            f"Category: {record.category}",
+            f"Type: {record.doc_type}",
+            f"Action: {record.action}",
+            f"Source: {record.source_path}",
+            f"Destination: {record.planned_destination or 'None'}",
+            f"Modified: {record.modified_iso}",
+            f"Confidence: {record.type_confidence}",
+            f"Tags: {tags}",
+            f"Reasoning: {reasoning}",
+            f"SHA256: {record.sha256}",
+        ]
+        self._set_sorted_preview("\\n".join(preview))
+
+    def _set_sorted_preview(self, value: str) -> None:
+        self.sorted_preview_text.configure(state="normal")
+        self.sorted_preview_text.delete("1.0", "end")
+        self.sorted_preview_text.insert("1.0", value)
+        self.sorted_preview_text.configure(state="disabled")
 
     def _append_log(self, value: str) -> None:
         self.log_text.configure(state="normal")
