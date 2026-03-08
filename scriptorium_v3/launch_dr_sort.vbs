@@ -5,7 +5,7 @@ Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
 appRoot = fso.GetParentFolderName(WScript.ScriptFullName)
-launcher = fso.BuildPath(appRoot, "Agency LOTUS.bat")
+launcher = fso.BuildPath(appRoot, "Dr. Sort-Academic Helper.bat")
 
 shell.CurrentDirectory = appRoot
 shell.Run Chr(34) & launcher & Chr(34), 0, False

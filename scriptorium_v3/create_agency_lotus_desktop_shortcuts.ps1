@@ -1,22 +1,30 @@
 param()
 
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Launcher = Join-Path $ProjectDir "launch_agency_lotus.vbs"
 $IconPath = Join-Path $ProjectDir "agency_lotus_icon.ico"
 $Desktop = [Environment]::GetFolderPath("Desktop")
-$ShortcutNames = @(
-    "Agency LOTUS.lnk",
-    "Dr. Sort-Academic Helper.lnk"
+$ShortcutMap = @(
+    @{
+        Name = "Agency LOTUS.lnk"
+        Launcher = Join-Path $ProjectDir "launch_agency_lotus.vbs"
+        Description = "Launch Agency LOTUS score app"
+    },
+    @{
+        Name = "Dr. Sort-Academic Helper.lnk"
+        Launcher = Join-Path $ProjectDir "launch_dr_sort.vbs"
+        Description = "Launch Dr. Sort-Academic Helper"
+    }
 )
+$ShortcutNames = $ShortcutMap | ForEach-Object { $_.Name }
 
 $Shell = New-Object -ComObject WScript.Shell
-foreach ($ShortcutName in $ShortcutNames) {
-    $ShortcutPath = Join-Path $Desktop $ShortcutName
+foreach ($ShortcutSpec in $ShortcutMap) {
+    $ShortcutPath = Join-Path $Desktop $ShortcutSpec.Name
     $Shortcut = $Shell.CreateShortcut($ShortcutPath)
     $Shortcut.TargetPath = Join-Path $env:SystemRoot "System32\wscript.exe"
-    $Shortcut.Arguments = '"' + $Launcher + '"'
+    $Shortcut.Arguments = '"' + $ShortcutSpec.Launcher + '"'
     $Shortcut.WorkingDirectory = $ProjectDir
-    $Shortcut.Description = "Launch Agency LOTUS - Dr. Sort-Academic Helper"
+    $Shortcut.Description = $ShortcutSpec.Description
     if (Test-Path $IconPath) {
         $Shortcut.IconLocation = $IconPath
     }

@@ -4,6 +4,7 @@ import argparse
 import datetime as dt
 import queue
 import shutil
+import subprocess
 import sys
 import threading
 import traceback
@@ -12,6 +13,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+import agency_lotus_core as lotus
 import document_sorter as sorter
 
 
@@ -41,10 +43,28 @@ SORT_BY_OPTIONS = (
     "Confidence",
     "Destination",
 )
+PROFILE_OPTIONS = (
+    "Academic Archive",
+    "Administrative Intake",
+    "Creative Vault",
+    "Mixed Professional",
+)
+REVIEW_FILTER_OPTIONS = (
+    "All Records",
+    "Needs Review",
+    "Duplicates Only",
+    "Low Confidence",
+    "Unclear Only",
+)
+DESTINATION_SCHEMA_OPTIONS = (
+    "Category / Type / Year",
+    "Category / Year / Type",
+    "Category / Author / Year",
+)
 
-APP_WINDOW_TITLE = "Agency LOTUS | Dr. Sort-Academic Helper"
-APP_HEADER_TITLE = "Agency LOTUS"
-APP_HEADER_SUBTITLE = "Dr. Sort-Academic Helper for academic, archive, and creative sorting."
+APP_WINDOW_TITLE = "Dr. Sort-Academic Helper"
+APP_HEADER_TITLE = "Dr. Sort-Academic Helper"
+APP_HEADER_SUBTITLE = "Professional archive sorter with detailed planning, review, and LOTUS feed integration."
 APP_DIALOG_TITLE = "Dr. Sort-Academic Helper"
 
 
@@ -103,20 +123,27 @@ class DrSortAcademicHelperApp(tk.Tk):
 
         default_sources = initial_paths or sorter.choose_sources(self.script_dir, [])
         self.source_var = tk.StringVar(value=paths_to_text(default_sources))
+        self.profile_var = tk.StringVar(value=PROFILE_OPTIONS[0])
         self.mode_var = tk.StringVar(value="copy")
         self.ocr_var = tk.StringVar(value="auto")
+        self.max_pages_var = tk.StringVar(value="5")
+        self.destination_schema_var = tk.StringVar(value=DESTINATION_SCHEMA_OPTIONS[0])
+        self.review_filter_var = tk.StringVar(value=REVIEW_FILTER_OPTIONS[0])
         self.sort_by_var = tk.StringVar(value="Proposed")
         self.sort_desc_var = tk.BooleanVar(value=False)
+        self.recursive_var = tk.BooleanVar(value=True)
+        self.similar_dedupe_var = tk.BooleanVar(value=True)
         self.rules_var = tk.StringVar(value=str(self.default_rules_path) if self.default_rules_path.exists() else "")
         self.search_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value="Ready.")
-        self.lotus_status_var = tk.StringVar(value="LOTUS is ready for Agency markdowns and text notes.")
+        self.lotus_status_var = tk.StringVar(value="LOTUS is ready to score Agency notes and receive Dr. Sort feeds.")
         self.summary_var = tk.StringVar(
             value="Choose a folder or files, click Scan, review the proposed destinations, then click Sort."
         )
 
         self.current_sources: list[Path] = default_sources
         self.current_records: list[sorter.DocumentRecord] = []
+        self.lotus_notes: list[lotus.LotusNote] = []
         self.latest_report_paths: dict[str, Path] = {}
         self.latest_run_id = ""
         self.last_applied_actions: list[tuple[str, Path, Path]] = []
@@ -129,6 +156,7 @@ class DrSortAcademicHelperApp(tk.Tk):
         self._build_ui()
         self.sort_by_var.trace_add("write", self._on_sort_settings_changed)
         self.sort_desc_var.trace_add("write", self._on_sort_settings_changed)
+        self.review_filter_var.trace_add("write", self._on_sort_settings_changed)
         self.after(200, self._poll_worker_queue)
 
     def _configure_style(self) -> None:
@@ -378,6 +406,66 @@ class DrSortAcademicHelperApp(tk.Tk):
         premium_frame.columnconfigure(8, weight=0)
         premium_frame.columnconfigure(9, weight=0)
 
+        ops_frame = ttk.Frame(root, style="Toolbar.TFrame", padding=(16, 10, 16, 10))
+        ops_frame.pack(fill="x", pady=(0, 12))
+        ttk.Label(ops_frame, text="Professional profile", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Combobox(
+            ops_frame,
+            textvariable=self.profile_var,
+            values=PROFILE_OPTIONS,
+            width=22,
+            state="readonly",
+        ).grid(row=1, column=0, sticky="w", padx=(0, 12), pady=(6, 0))
+
+        ttk.Label(ops_frame, text="Destination schema", style="Section.TLabel").grid(row=0, column=1, sticky="w")
+        ttk.Combobox(
+            ops_frame,
+            textvariable=self.destination_schema_var,
+            values=DESTINATION_SCHEMA_OPTIONS,
+            width=22,
+            state="readonly",
+        ).grid(row=1, column=1, sticky="w", padx=(0, 12), pady=(6, 0))
+
+        ttk.Label(ops_frame, text="Review filter", style="Section.TLabel").grid(row=0, column=2, sticky="w")
+        ttk.Combobox(
+            ops_frame,
+            textvariable=self.review_filter_var,
+            values=REVIEW_FILTER_OPTIONS,
+            width=18,
+            state="readonly",
+        ).grid(row=1, column=2, sticky="w", padx=(0, 12), pady=(6, 0))
+
+        ttk.Label(ops_frame, text="Max PDF pages", style="Section.TLabel").grid(row=0, column=3, sticky="w")
+        ttk.Combobox(
+            ops_frame,
+            textvariable=self.max_pages_var,
+            values=("3", "5", "8", "12", "20"),
+            width=10,
+            state="readonly",
+        ).grid(row=1, column=3, sticky="w", padx=(0, 12), pady=(6, 0))
+
+        ttk.Checkbutton(
+            ops_frame,
+            text="Recursive Scan",
+            variable=self.recursive_var,
+            style="Teal.TCheckbutton",
+        ).grid(row=1, column=4, sticky="w", padx=(0, 12), pady=(6, 0))
+
+        ttk.Checkbutton(
+            ops_frame,
+            text="Similar Dedupe",
+            variable=self.similar_dedupe_var,
+            style="Teal.TCheckbutton",
+        ).grid(row=1, column=5, sticky="w", padx=(0, 12), pady=(6, 0))
+
+        ttk.Button(ops_frame, text="Open Agency LOTUS", style="GoldAction.TButton", command=self.open_lotus_app).grid(
+            row=1, column=6, sticky="w", padx=(0, 8), pady=(6, 0)
+        )
+        ttk.Button(ops_frame, text="Feed Current Plan", style="Utility.TButton", command=self.feed_current_plan_to_lotus).grid(
+            row=1, column=7, sticky="w", pady=(6, 0)
+        )
+        ops_frame.columnconfigure(8, weight=1)
+
         summary_frame = ttk.Frame(root, style="TealCard.TFrame", padding=(16, 14))
         summary_frame.pack(fill="x", pady=(0, 12))
         ttk.Label(summary_frame, textvariable=self.summary_var, wraplength=1480, justify="left", style="Summary.TLabel").pack(anchor="w")
@@ -483,45 +571,78 @@ class DrSortAcademicHelperApp(tk.Tk):
         lotus_toolbar.pack(fill="x")
         ttk.Label(
             lotus_toolbar,
-            text="LOTUS keeps Agency-uploaded markdown and text files in a creative-meaning workspace.",
+            text="LOTUS is the standalone Agency score app. It scores uploaded notes and Dr. Sort feed entries for agency, strategy, governance, and creative meaning.",
             style="WarmMuted.TLabel",
             justify="left",
-        ).grid(row=0, column=0, columnspan=5, sticky="w")
+        ).grid(row=0, column=0, columnspan=6, sticky="w")
         ttk.Button(lotus_toolbar, text="Upload to LOTUS", style="GoldAction.TButton", command=self.upload_lotus_files).grid(
             row=1, column=0, padx=(0, 8), pady=(8, 0), sticky="w"
         )
         ttk.Button(lotus_toolbar, text="Refresh LOTUS", style="Utility.TButton", command=self.refresh_lotus_library).grid(
             row=1, column=1, padx=(0, 8), pady=(8, 0), sticky="w"
         )
-        ttk.Button(lotus_toolbar, text="Use LOTUS as Source", style="Utility.TButton", command=self.use_lotus_sources).grid(
+        ttk.Button(lotus_toolbar, text="Feed Current Plan", style="Utility.TButton", command=self.feed_current_plan_to_lotus).grid(
             row=1, column=2, padx=(0, 8), pady=(8, 0), sticky="w"
         )
-        ttk.Button(lotus_toolbar, text="Scan Selected", style="Scan.TButton", command=self.scan_selected_lotus).grid(
+        ttk.Button(lotus_toolbar, text="Use LOTUS as Source", style="Utility.TButton", command=self.use_lotus_sources).grid(
             row=1, column=3, padx=(0, 8), pady=(8, 0), sticky="w"
         )
-        ttk.Label(lotus_toolbar, textvariable=self.lotus_status_var, style="Section.TLabel").grid(
-            row=1, column=4, sticky="e", pady=(8, 0)
+        ttk.Button(lotus_toolbar, text="Scan Selected", style="Scan.TButton", command=self.scan_selected_lotus).grid(
+            row=1, column=4, padx=(0, 8), pady=(8, 0), sticky="w"
         )
-        lotus_toolbar.columnconfigure(4, weight=1)
+        ttk.Button(lotus_toolbar, text="Open Agency LOTUS App", style="GoldAction.TButton", command=self.open_lotus_app).grid(
+            row=1, column=5, padx=(0, 8), pady=(8, 0), sticky="w"
+        )
+        ttk.Label(lotus_toolbar, textvariable=self.lotus_status_var, style="Section.TLabel").grid(
+            row=1, column=6, sticky="e", pady=(8, 0)
+        )
+        lotus_toolbar.columnconfigure(6, weight=1)
 
-        lotus_table_frame = ttk.Frame(lotus_frame, style="Card.TFrame", padding=(10, 10, 10, 6))
-        lotus_table_frame.pack(fill="both", expand=True)
-        lotus_columns = ("name", "extension", "modified", "size_kb")
+        lotus_body = ttk.Frame(lotus_frame)
+        lotus_body.pack(fill="both", expand=True)
+
+        lotus_table_frame = ttk.Frame(lotus_body, style="Card.TFrame", padding=(10, 10, 10, 6))
+        lotus_table_frame.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        lotus_columns = ("title", "agency", "creative", "strategic", "modified", "signals", "file")
         self.lotus_tree = ttk.Treeview(lotus_table_frame, columns=lotus_columns, show="headings", height=8)
-        self.lotus_tree.heading("name", text="LOTUS file")
-        self.lotus_tree.heading("extension", text="Kind")
+        self.lotus_tree.heading("title", text="LOTUS note")
+        self.lotus_tree.heading("agency", text="Agency")
+        self.lotus_tree.heading("creative", text="Creative")
+        self.lotus_tree.heading("strategic", text="Strategic")
         self.lotus_tree.heading("modified", text="Modified")
-        self.lotus_tree.heading("size_kb", text="KB")
-        self.lotus_tree.column("name", width=620, stretch=True)
-        self.lotus_tree.column("extension", width=90, stretch=False, anchor="center")
+        self.lotus_tree.heading("signals", text="Signals")
+        self.lotus_tree.heading("file", text="File")
+        self.lotus_tree.column("title", width=280, stretch=True)
+        self.lotus_tree.column("agency", width=72, stretch=False, anchor="center")
+        self.lotus_tree.column("creative", width=72, stretch=False, anchor="center")
+        self.lotus_tree.column("strategic", width=72, stretch=False, anchor="center")
         self.lotus_tree.column("modified", width=140, stretch=False)
-        self.lotus_tree.column("size_kb", width=90, stretch=False, anchor="e")
+        self.lotus_tree.column("signals", width=170, stretch=False)
+        self.lotus_tree.column("file", width=220, stretch=True)
+        self.lotus_tree.bind("<<TreeviewSelect>>", self._on_lotus_selected)
         lotus_scroll = ttk.Scrollbar(lotus_table_frame, orient="vertical", command=self.lotus_tree.yview)
         self.lotus_tree.configure(yscrollcommand=lotus_scroll.set)
         self.lotus_tree.grid(row=0, column=0, sticky="nsew")
         lotus_scroll.grid(row=0, column=1, sticky="ns")
         lotus_table_frame.rowconfigure(0, weight=1)
         lotus_table_frame.columnconfigure(0, weight=1)
+
+        lotus_preview_frame = ttk.Frame(lotus_body, style="Card.TFrame", padding=(12, 12))
+        lotus_preview_frame.pack(side="right", fill="both", expand=True)
+        ttk.Label(lotus_preview_frame, text="LOTUS Preview", style="Section.TLabel").pack(anchor="w")
+        self.lotus_preview_text = tk.Text(
+            lotus_preview_frame,
+            wrap="word",
+            bg=SURFACE,
+            fg=INK,
+            insertbackground=VIOLET_GEM,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=TREE_BORDER,
+            highlightcolor=MUTED_GOLD,
+        )
+        self.lotus_preview_text.pack(fill="both", expand=True, pady=(8, 0))
+        self.lotus_preview_text.configure(state="disabled")
         self.refresh_lotus_library()
 
     def choose_folder(self) -> None:
@@ -548,38 +669,53 @@ class DrSortAcademicHelperApp(tk.Tk):
         self.source_var.set(paths_to_text(self.current_sources))
 
     def _ensure_lotus_root(self) -> Path:
-        self.lotus_root.mkdir(parents=True, exist_ok=True)
-        return self.lotus_root
-
-    def _discover_lotus_files(self) -> list[Path]:
-        root = self._ensure_lotus_root()
-        return sorted(
-            [path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in {".md", ".txt"}],
-            key=lambda path: (path.suffix.lower(), path.name.lower()),
-        )
+        return lotus.ensure_lotus_root(self.lotus_root)
 
     def _selected_lotus_paths(self) -> list[Path]:
         selected: list[Path] = []
         for item in self.lotus_tree.selection():
-            raw_path = self.lotus_tree.item(item, "values")[0]
+            raw_path = self.lotus_tree.item(item, "values")[-1]
             candidate = self.lotus_root / raw_path
             if candidate.exists():
                 selected.append(candidate.resolve())
         return selected
 
+    def _selected_lotus_note(self) -> lotus.LotusNote | None:
+        selection = self.lotus_tree.selection()
+        if not selection:
+            return None
+        index = self.lotus_tree.index(selection[0])
+        if 0 <= index < len(self.lotus_notes):
+            return self.lotus_notes[index]
+        return None
+
     def refresh_lotus_library(self) -> None:
         for item in self.lotus_tree.get_children():
             self.lotus_tree.delete(item)
-        files = self._discover_lotus_files()
-        for path in files:
-            stat = path.stat()
-            relative_name = str(path.relative_to(self.lotus_root))
-            modified = dt.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
-            size_kb = f"{max(1, stat.st_size // 1024)}"
-            self.lotus_tree.insert("", "end", values=(relative_name, path.suffix.lower(), modified, size_kb))
+        self.lotus_notes = lotus.load_lotus_notes(self._ensure_lotus_root())
+        for note in self.lotus_notes:
+            relative_name = str(note.path.relative_to(self.lotus_root))
+            self.lotus_tree.insert(
+                "",
+                "end",
+                values=(
+                    note.title,
+                    note.agency_score,
+                    note.creative_score,
+                    note.strategic_score,
+                    note.modified_iso,
+                    ", ".join(note.signals[:4]),
+                    relative_name,
+                ),
+            )
+        feed_count = sum(1 for note in self.lotus_notes if "dr_sort_feed" in note.path.parts)
         self.lotus_status_var.set(
-            f"LOTUS contains {len(files)} Agency file(s). Markdown and text here can feed the main sorter."
+            f"LOTUS has {len(self.lotus_notes)} note(s), including {feed_count} Dr. Sort feed item(s)."
         )
+        if self.lotus_notes:
+            self._show_lotus_note(self.lotus_notes[0])
+        else:
+            self._set_lotus_preview("No LOTUS notes yet.")
 
     def upload_lotus_files(self) -> None:
         chosen = filedialog.askopenfilenames(
@@ -588,21 +724,11 @@ class DrSortAcademicHelperApp(tk.Tk):
         )
         if not chosen:
             return
-        lotus_root = self._ensure_lotus_root()
-        imported = 0
-        for raw_path in chosen:
-            source = Path(raw_path).resolve()
-            destination = lotus_root / source.name
-            counter = 2
-            while destination.exists():
-                destination = lotus_root / f"{source.stem} [{counter}]{source.suffix}"
-                counter += 1
-            shutil.copy2(source, destination)
-            imported += 1
+        imported = lotus.import_notes([Path(raw_path).resolve() for raw_path in chosen], self._ensure_lotus_root())
         self.refresh_lotus_library()
-        self.summary_var.set(f"LOTUS uploaded {imported} file(s).")
+        self.summary_var.set(f"LOTUS uploaded {len(imported)} file(s).")
         self.status_var.set("LOTUS upload complete.")
-        self._append_log(f"LOTUS uploaded {imported} Agency markdown/text file(s).")
+        self._append_log(f"LOTUS uploaded {len(imported)} Agency markdown/text file(s).")
 
     def use_lotus_sources(self) -> None:
         lotus_root = self._ensure_lotus_root()
@@ -619,6 +745,62 @@ class DrSortAcademicHelperApp(tk.Tk):
         self.current_sources = selected
         self.source_var.set(paths_to_text(self.current_sources))
         self.start_scan()
+
+    def open_lotus_app(self) -> None:
+        launcher = (self.script_dir / "Agency LOTUS.bat").resolve()
+        if not launcher.exists():
+            messagebox.showerror(APP_DIALOG_TITLE, "Agency LOTUS launcher was not found.")
+            return
+        try:
+            subprocess.Popen([str(launcher)], cwd=str(self.script_dir))
+        except Exception as exc:
+            messagebox.showerror(APP_DIALOG_TITLE, str(exc))
+
+    def feed_current_plan_to_lotus(self) -> None:
+        if not self.current_records:
+            messagebox.showinfo(APP_DIALOG_TITLE, "Scan files first so there is a current plan to feed into LOTUS.")
+            return
+        run_id = self.latest_run_id or sorter.timestamp()
+        summary_text = self._lotus_feed_summary_text()
+        feed_path = lotus.write_dr_sort_feed(
+            self.current_records,
+            lotus_root=self._ensure_lotus_root(),
+            run_id=run_id,
+            summary_text=summary_text,
+            profile_name=self.profile_var.get(),
+            destination_schema=self.destination_schema_var.get(),
+        )
+        self.refresh_lotus_library()
+        self.summary_var.set(f"Current Dr. Sort plan was fed into LOTUS: {feed_path.name}")
+        self.status_var.set("LOTUS feed created.")
+        self._append_log(f"LOTUS feed created: {feed_path}")
+
+    def _on_lotus_selected(self, _event: object) -> None:
+        note = self._selected_lotus_note()
+        if note is not None:
+            self._show_lotus_note(note)
+
+    def _show_lotus_note(self, note: lotus.LotusNote) -> None:
+        preview = [
+            f"Title: {note.title}",
+            f"Agency Score: {note.agency_score}",
+            f"Creative Meaning: {note.creative_score}",
+            f"Strategic Signal: {note.strategic_score}",
+            f"Governance Signal: {note.governance_score}",
+            f"Operational Signal: {note.operational_score}",
+            f"Meaning Signal: {note.meaning_score}",
+            f"Signals: {', '.join(note.signals) if note.signals else 'none'}",
+            f"File: {note.path}",
+            "",
+            note.excerpt or note.text[:2000] or "No preview available.",
+        ]
+        self._set_lotus_preview("\n".join(preview))
+
+    def _set_lotus_preview(self, value: str) -> None:
+        self.lotus_preview_text.configure(state="normal")
+        self.lotus_preview_text.delete("1.0", "end")
+        self.lotus_preview_text.insert("1.0", value)
+        self.lotus_preview_text.configure(state="disabled")
 
     def choose_rules_file(self) -> None:
         chosen = filedialog.askopenfilename(
@@ -676,10 +858,10 @@ class DrSortAcademicHelperApp(tk.Tk):
             return
         query = self.search_var.get().strip()
         if not query:
-            self._refresh_tree(self.current_records)
+            self._refresh_tree(self._current_display_records())
             self.summary_var.set("Search cleared. Showing the full proposed plan.")
             return
-        matches = sorter.search_records(self.current_records, query)
+        matches = sorter.search_records(self._current_display_records(), query)
         records = [record for record, _score in matches]
         self._refresh_tree(records)
         self.summary_var.set(f"Semantic search found {len(records)} result(s) for: {query}")
@@ -688,7 +870,7 @@ class DrSortAcademicHelperApp(tk.Tk):
     def clear_search(self) -> None:
         self.search_var.set("")
         if self.current_records:
-            self._refresh_tree(self.current_records)
+            self._refresh_tree(self._current_display_records())
             self.summary_var.set("Showing the full proposed plan.")
             self.status_var.set("Search cleared.")
 
@@ -760,7 +942,7 @@ class DrSortAcademicHelperApp(tk.Tk):
 
     def _source_snapshot(self) -> tuple[int, int, int]:
         sources = self._resolve_sources()
-        discovered = sorter.discover_files(sources, recursive=True, limit=None)
+        discovered = sorter.discover_files(sources, recursive=self.recursive_var.get(), limit=None)
         count = 0
         total_size = 0
         latest_mtime = 0
@@ -788,7 +970,7 @@ class DrSortAcademicHelperApp(tk.Tk):
 
     def _on_sort_settings_changed(self, *_args: object) -> None:
         if self.current_records:
-            self._refresh_tree(self.current_records)
+            self._refresh_tree(self._current_display_records())
 
     def _scan_worker(self, sources: list[Path]) -> None:
         try:
@@ -796,17 +978,22 @@ class DrSortAcademicHelperApp(tk.Tk):
             rules = sorter.load_plain_english_rules(self._resolve_rules())
             records = sorter.scan_documents(
                 source_roots=sources,
-                max_pages=5,
+                max_pages=self._max_pages_value(),
                 ocr_mode=self.ocr_var.get().strip().lower(),
-                recursive=True,
+                recursive=self.recursive_var.get(),
                 limit=None,
                 identities=self.identities,
                 script_dir=self.script_dir,
                 rules=rules,
                 progress_callback=lambda message: self.worker_queue.put(("progress", message)),
             )
-            sorter.mark_duplicates(records, similar_dedupe=True)
-            sorter.plan_destinations(records, output_root=self.output_root, quarantine_root=self.quarantine_root)
+            sorter.mark_duplicates(records, similar_dedupe=self.similar_dedupe_var.get())
+            sorter.plan_destinations(
+                records,
+                output_root=self.output_root,
+                quarantine_root=self.quarantine_root,
+                destination_schema=self._destination_schema_key(),
+            )
             sorter.apply_plan(records, mode="scan", progress_callback=lambda _message: None)
             csv_path, json_path, summary_path = sorter.write_reports(records, report_root=self.report_root, run_id=run_id)
             payload = {
@@ -822,6 +1009,12 @@ class DrSortAcademicHelperApp(tk.Tk):
 
     def _sort_worker(self, mode: str) -> None:
         try:
+            sorter.plan_destinations(
+                self.current_records,
+                output_root=self.output_root,
+                quarantine_root=self.quarantine_root,
+                destination_schema=self._destination_schema_key(),
+            )
             sorter.apply_plan(
                 self.current_records,
                 mode=mode,
@@ -954,7 +1147,7 @@ class DrSortAcademicHelperApp(tk.Tk):
             mode="scan",
         )
         self.summary_var.set(
-            f"Scan complete. Review the proposed destinations below, then click Sort to apply the plan."
+            f"Scan complete for {self.profile_var.get()}. Review the proposed destinations below, then click Sort to apply the plan using {self.destination_schema_var.get()}."
         )
         self.status_var.set(f"Scan complete. {len(records)} document(s) evaluated.")
         self._set_report_text(summary)
@@ -987,7 +1180,7 @@ class DrSortAcademicHelperApp(tk.Tk):
         )
         undo_note = " Undo Last Sort is available." if self.last_applied_actions else ""
         self.summary_var.set(
-            f"Sort complete. Files were processed in {payload['mode']} mode and the reports were updated.{undo_note}"
+            f"Sort complete. Files were processed in {payload['mode']} mode under {self.profile_var.get()} with {self.destination_schema_var.get()}.{undo_note}"
         )
         self.status_var.set("Sorting complete.")
         self._set_report_text(summary)
@@ -1057,6 +1250,11 @@ class DrSortAcademicHelperApp(tk.Tk):
             f"Output root: {self.output_root}",
             f"Duplicate quarantine: {self.quarantine_root}",
             f"Reports: {summary_path}",
+            f"Profile: {self.profile_var.get()}",
+            f"Destination schema: {self.destination_schema_var.get()}",
+            f"Recursive scan: {self.recursive_var.get()}",
+            f"Similar dedupe: {self.similar_dedupe_var.get()}",
+            f"Max PDF pages: {self._max_pages_value()}",
             "",
             f"Documents scanned: {len(records)}",
             f"Kept: {duplicates.get('keep', 0)}",
@@ -1121,10 +1319,58 @@ class DrSortAcademicHelperApp(tk.Tk):
             return path.read_text(encoding="latin-1", errors="replace")
 
     def _current_display_records(self) -> list[sorter.DocumentRecord]:
+        records = self.current_records
+        filter_name = self.review_filter_var.get()
+        if filter_name == "Needs Review":
+            records = [record for record in records if record.duplicate_status != "keep" or record.category == "UNCLEAR" or record.type_confidence < 10]
+        elif filter_name == "Duplicates Only":
+            records = [record for record in records if record.duplicate_status != "keep"]
+        elif filter_name == "Low Confidence":
+            records = [record for record in records if record.type_confidence < 10]
+        elif filter_name == "Unclear Only":
+            records = [record for record in records if record.category == "UNCLEAR" or record.doc_type == "ocr_needed"]
         query = self.search_var.get().strip()
         if not query:
-            return self.current_records
-        return [record for record, _score in sorter.search_records(self.current_records, query)]
+            return records
+        return [record for record, _score in sorter.search_records(records, query)]
+
+    def _max_pages_value(self) -> int:
+        raw = self.max_pages_var.get().strip()
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            return 5
+
+    def _destination_schema_key(self) -> str:
+        mapping = {
+            "Category / Type / Year": "category_type_year",
+            "Category / Year / Type": "category_year_type",
+            "Category / Author / Year": "category_author_year",
+        }
+        return mapping.get(self.destination_schema_var.get(), "category_type_year")
+
+    def _lotus_feed_summary_text(self) -> str:
+        categories, types, duplicates = summarize_counts(self.current_records)
+        lines = [
+            f"Profile: {self.profile_var.get()}",
+            f"Mode: {self.mode_var.get()}",
+            f"Destination schema: {self.destination_schema_var.get()}",
+            f"Review filter: {self.review_filter_var.get()}",
+            f"Recursive scan: {self.recursive_var.get()}",
+            f"Similar dedupe: {self.similar_dedupe_var.get()}",
+            "",
+            f"Records: {len(self.current_records)}",
+            f"Kept: {duplicates.get('keep', 0)}",
+            f"Exact duplicates: {duplicates.get('duplicate_exact', 0)}",
+            f"Probable duplicates: {duplicates.get('duplicate_probable', 0)}",
+            "",
+            "Category counts:",
+        ]
+        lines.extend(f"- {key}: {value}" for key, value in sorted(categories.items()))
+        lines.append("")
+        lines.append("Type counts:")
+        lines.extend(f"- {key}: {value}" for key, value in sorted(types.items()))
+        return "\n".join(lines)
 
     def _sort_records(self, records: list[sorter.DocumentRecord]) -> list[sorter.DocumentRecord]:
         sort_by = self.sort_by_var.get()
@@ -1183,16 +1429,21 @@ class DrSortAcademicHelperApp(tk.Tk):
         rules = sorter.load_plain_english_rules(self._resolve_rules())
         records = sorter.scan_documents(
             source_roots=sources,
-            max_pages=5,
+            max_pages=self._max_pages_value(),
             ocr_mode=self.ocr_var.get().strip().lower(),
-            recursive=True,
+            recursive=self.recursive_var.get(),
             limit=3,
             identities=self.identities,
             script_dir=self.script_dir,
             rules=rules,
         )
-        sorter.mark_duplicates(records, similar_dedupe=True)
-        sorter.plan_destinations(records, output_root=self.output_root, quarantine_root=self.quarantine_root)
+        sorter.mark_duplicates(records, similar_dedupe=self.similar_dedupe_var.get())
+        sorter.plan_destinations(
+            records,
+            output_root=self.output_root,
+            quarantine_root=self.quarantine_root,
+            destination_schema=self._destination_schema_key(),
+        )
         sorter.apply_plan(records, mode="scan")
         csv_path, json_path, summary_path = sorter.write_reports(records, report_root=self.report_root, run_id=run_id)
         self._finish_scan(
@@ -1245,7 +1496,7 @@ class DrSortAcademicHelperApp(tk.Tk):
             "first_title": sorted_preview[0].title if sorted_preview else "",
             "rules_loaded": len(rules),
             "search_hits": search_hits,
-            "lotus_files": len(self._discover_lotus_files()),
+            "lotus_files": len(self.lotus_notes),
             "sort_state": str(self.sort_button["state"]),
             "crossref_state": str(self.crossref_button["state"]),
             "masterlist_state": str(self.masterlist_button["state"]),

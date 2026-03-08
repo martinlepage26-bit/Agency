@@ -1661,7 +1661,12 @@ def mark_duplicates(records: list[DocumentRecord], similar_dedupe: bool) -> None
             record.duplicate_group = hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
 
 
-def build_destination(record: DocumentRecord, output_root: Path, quarantine_root: Path) -> Path:
+def build_destination(
+    record: DocumentRecord,
+    output_root: Path,
+    quarantine_root: Path,
+    destination_schema: str = "category_type_year",
+) -> Path:
     year_bucket = record.year or "Undated"
     filename = f"{record.filename_stub()}{record.extension}"
     if record.duplicate_status == "duplicate_exact":
@@ -1672,6 +1677,11 @@ def build_destination(record: DocumentRecord, output_root: Path, quarantine_root
         return output_root / "UNCLEAR" / "Scans_OCR_Needed" / year_bucket / filename
     if record.category == "UNCLEAR":
         return output_root / "UNCLEAR" / year_bucket / filename
+    if destination_schema == "category_year_type":
+        return output_root / record.category / year_bucket / record.doc_type / filename
+    if destination_schema == "category_author_year":
+        author_bucket = sanitize_filename_component(record.author_key or record.primary_author or "UnknownAuthor", max_len=40)
+        return output_root / record.category / author_bucket / year_bucket / record.doc_type / filename
     return output_root / record.category / record.doc_type / year_bucket / filename
 
 
@@ -2039,11 +2049,21 @@ def scan_documents(
     return records
 
 
-def plan_destinations(records: list[DocumentRecord], output_root: Path, quarantine_root: Path) -> None:
+def plan_destinations(
+    records: list[DocumentRecord],
+    output_root: Path,
+    quarantine_root: Path,
+    destination_schema: str = "category_type_year",
+) -> None:
     used_paths: set[Path] = set()
     for record in records:
         record.planned_destination = ensure_unique_path(
-            build_destination(record, output_root=output_root, quarantine_root=quarantine_root),
+            build_destination(
+                record,
+                output_root=output_root,
+                quarantine_root=quarantine_root,
+                destination_schema=destination_schema,
+            ),
             used_paths=used_paths,
         )
 
