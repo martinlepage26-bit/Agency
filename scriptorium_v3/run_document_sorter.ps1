@@ -5,6 +5,7 @@ param(
     [ValidateSet("auto", "never")]
     [string]$Ocr = "auto",
     [int]$MaxPages = 5,
+    [string]$RulesFile,
     [switch]$RenderCrossReference,
     [switch]$RenderMasterlist,
     [switch]$NoSimilarDedupe,
@@ -39,6 +40,10 @@ foreach ($Item in $Source) {
     if ($Item) {
         $Args += @("--source", $Item)
     }
+}
+
+if ($RulesFile) {
+    $Args += @("--rules-file", $RulesFile)
 }
 
 if ($NoSimilarDedupe) {

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import queue
+import shutil
 import sys
 import threading
 import traceback
@@ -13,17 +15,19 @@ from tkinter import filedialog, messagebox, ttk
 import document_sorter as sorter
 
 
-VIOLET_GEM = "#5B2A86"
-VIOLET_MIST = "#F4EEFA"
-SCARLET_ROSE = "#B63A64"
-MUTED_GOLD = "#B9923B"
-TEAL = "#1F7A8C"
-TEAL_MIST = "#E7F7F7"
-INK = "#23162D"
-SUBTLE_INK = "#665671"
-SURFACE = "#FFFDF8"
-SURFACE_ALT = "#F7F1FB"
-TREE_BORDER = "#D8C7E6"
+VIOLET_GEM = "#3F375B"
+VIOLET_MIST = "#F7EFE3"
+SCARLET_ROSE = "#B55E3F"
+MUTED_GOLD = "#A66F22"
+TEAL = "#6C4B35"
+TEAL_MIST = "#F2E4D5"
+INK = "#2A201C"
+SUBTLE_INK = "#6E5A4A"
+SURFACE = "#FFF9F2"
+SURFACE_ALT = "#F3E3D1"
+TREE_BORDER = "#D6B89C"
+DEFAULT_MONITOR_INTERVAL_MS = 15000
+LOTUS_UPLOAD_DIR_NAME = "LOTUS_UPLOADS"
 SORT_BY_OPTIONS = (
     "Proposed",
     "Source",
@@ -87,8 +91,10 @@ class ScriptoriumApp(tk.Tk):
         self.output_root = (self.script_dir / sorter.DEFAULT_OUTPUT_DIR).resolve()
         self.quarantine_root = (self.script_dir / sorter.DEFAULT_QUARANTINE_DIR).resolve()
         self.report_root = (self.script_dir / sorter.DEFAULT_REPORT_DIR).resolve()
+        self.lotus_root = (self.script_dir / LOTUS_UPLOAD_DIR_NAME).resolve()
         self.identities = list(sorter.DEFAULT_IDENTITIES)
         self.bibliography_path = (self.script_dir / "MASTER BIBLIOGRAPHY.txt").resolve()
+        self.default_rules_path = (self.script_dir / sorter.RULES_EXAMPLE_NAME).resolve()
 
         default_sources = initial_paths or sorter.choose_sources(self.script_dir, [])
         self.source_var = tk.StringVar(value=paths_to_text(default_sources))
@@ -96,7 +102,10 @@ class ScriptoriumApp(tk.Tk):
         self.ocr_var = tk.StringVar(value="auto")
         self.sort_by_var = tk.StringVar(value="Proposed")
         self.sort_desc_var = tk.BooleanVar(value=False)
+        self.rules_var = tk.StringVar(value=str(self.default_rules_path) if self.default_rules_path.exists() else "")
+        self.search_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value="Ready.")
+        self.lotus_status_var = tk.StringVar(value="LOTUS is ready for Agency markdowns and text notes.")
         self.summary_var = tk.StringVar(
             value="Choose a folder or files, click Scan, review the proposed destinations, then click Sort."
         )
@@ -105,6 +114,9 @@ class ScriptoriumApp(tk.Tk):
         self.current_records: list[sorter.DocumentRecord] = []
         self.latest_report_paths: dict[str, Path] = {}
         self.latest_run_id = ""
+        self.last_applied_actions: list[tuple[str, Path, Path]] = []
+        self.monitor_enabled = False
+        self.monitor_snapshot: tuple[int, int, int] | None = None
         self.busy = False
         self.worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
 
@@ -127,7 +139,7 @@ class ScriptoriumApp(tk.Tk):
         style.configure("Hero.TFrame", background=VIOLET_GEM)
         style.configure("Toolbar.TFrame", background=SURFACE_ALT)
         style.configure("Header.TLabel", background=VIOLET_GEM, foreground="white", font=("Georgia", 21, "bold"))
-        style.configure("HeroSub.TLabel", background=VIOLET_GEM, foreground="#F5EFFF", font=("Segoe UI", 10))
+        style.configure("HeroSub.TLabel", background=VIOLET_GEM, foreground="#F4E9DD", font=("Segoe UI", 10))
         style.configure("Section.TLabel", background=SURFACE_ALT, foreground=TEAL, font=("Segoe UI", 10, "bold"))
         style.configure("Summary.TLabel", background=TEAL_MIST, foreground=INK)
         style.configure("Status.TLabel", background=TEAL_MIST, foreground=TEAL, font=("Segoe UI", 10, "bold"))
@@ -144,7 +156,7 @@ class ScriptoriumApp(tk.Tk):
             padding=(14, 9),
             font=("Segoe UI", 10, "bold"),
         )
-        style.map("Scan.TButton", background=[("active", "#2C8EA0"), ("disabled", "#9EC9D0")])
+        style.map("Scan.TButton", background=[("active", "#8A6247"), ("disabled", "#C8B19F")])
         style.configure(
             "Sort.TButton",
             background=SCARLET_ROSE,
@@ -155,7 +167,7 @@ class ScriptoriumApp(tk.Tk):
             padding=(14, 9),
             font=("Segoe UI", 10, "bold"),
         )
-        style.map("Sort.TButton", background=[("active", "#C64D75"), ("disabled", "#D8A8B6")])
+        style.map("Sort.TButton", background=[("active", "#C67454"), ("disabled", "#DAB4A2")])
         style.configure(
             "GoldAction.TButton",
             background=MUTED_GOLD,
@@ -166,7 +178,7 @@ class ScriptoriumApp(tk.Tk):
             padding=(12, 9),
             font=("Segoe UI", 10, "bold"),
         )
-        style.map("GoldAction.TButton", background=[("active", "#CAA24B"), ("disabled", "#D8C091")])
+        style.map("GoldAction.TButton", background=[("active", "#BD8532"), ("disabled", "#D6BE95")])
         style.configure(
             "Utility.TButton",
             background="white",
@@ -200,13 +212,13 @@ class ScriptoriumApp(tk.Tk):
         style.configure("TNotebook.Tab", background=TEAL_MIST, foreground=TEAL, padding=(14, 8))
         style.map(
             "TNotebook.Tab",
-            background=[("selected", TEAL), ("active", "#2C8EA0")],
+            background=[("selected", TEAL), ("active", "#8A6247")],
             foreground=[("selected", "white"), ("active", "white")],
         )
         style.configure("Treeview", background="white", fieldbackground="white", foreground=INK, rowheight=26, bordercolor=TREE_BORDER)
         style.configure("Treeview.Heading", background=VIOLET_GEM, foreground="white", font=("Segoe UI", 9, "bold"))
         style.map("Treeview", background=[("selected", TEAL_MIST)], foreground=[("selected", INK)])
-        style.map("Treeview.Heading", background=[("active", "#7340A2")])
+        style.map("Treeview.Heading", background=[("active", "#564A78")])
         style.configure("Teal.TCheckbutton", background=SURFACE_ALT, foreground=TEAL, font=("Segoe UI", 9, "bold"))
 
     def _build_ui(self) -> None:
@@ -223,7 +235,7 @@ class ScriptoriumApp(tk.Tk):
         ).pack(anchor="w", pady=(4, 0))
         ttk.Label(
             header,
-            text="Violet gem core  •  scarlet rose action  •  muted gold highlights  •  teal scan flow",
+            text="Indigo earth core  •  terracotta action  •  deep ochre highlights  •  clay utility accents",
             style="Gold.TLabel",
         ).pack(anchor="w", pady=(8, 0))
 
@@ -316,6 +328,51 @@ class ScriptoriumApp(tk.Tk):
         controls.columnconfigure(7, weight=0)
         controls.columnconfigure(8, weight=1)
 
+        premium_frame = ttk.Frame(root, style="Toolbar.TFrame", padding=(16, 10, 16, 10))
+        premium_frame.pack(fill="x", pady=(0, 12))
+        ttk.Label(premium_frame, text="Rules file", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+        self.rules_entry = ttk.Entry(premium_frame, textvariable=self.rules_var)
+        self.rules_entry.grid(row=1, column=0, columnspan=3, sticky="ew", padx=(0, 8), pady=(6, 0))
+        ttk.Button(premium_frame, text="Browse Rules", style="Utility.TButton", command=self.choose_rules_file).grid(
+            row=1, column=3, padx=(0, 14), pady=(6, 0)
+        )
+
+        ttk.Label(premium_frame, text="Semantic search", style="Section.TLabel").grid(row=0, column=4, sticky="w")
+        self.search_entry = ttk.Entry(premium_frame, textvariable=self.search_var)
+        self.search_entry.grid(row=1, column=4, columnspan=2, sticky="ew", padx=(0, 8), pady=(6, 0))
+        ttk.Button(premium_frame, text="Search", style="Utility.TButton", command=self.start_search).grid(
+            row=1, column=6, padx=(0, 8), pady=(6, 0)
+        )
+        ttk.Button(premium_frame, text="Clear", style="Utility.TButton", command=self.clear_search).grid(
+            row=1, column=7, padx=(0, 14), pady=(6, 0)
+        )
+        self.monitor_button = ttk.Button(
+            premium_frame,
+            text="Start Monitor",
+            style="Utility.TButton",
+            command=self.toggle_monitoring,
+        )
+        self.monitor_button.grid(row=1, column=8, padx=(0, 8), pady=(6, 0))
+        self.undo_button = ttk.Button(
+            premium_frame,
+            text="Undo Last Sort",
+            style="Utility.TButton",
+            command=self.start_undo_last_sort,
+        )
+        self.undo_button.grid(row=1, column=9, pady=(6, 0))
+        self.undo_button.configure(state="disabled")
+
+        premium_frame.columnconfigure(0, weight=0)
+        premium_frame.columnconfigure(1, weight=0)
+        premium_frame.columnconfigure(2, weight=1)
+        premium_frame.columnconfigure(3, weight=0)
+        premium_frame.columnconfigure(4, weight=0)
+        premium_frame.columnconfigure(5, weight=1)
+        premium_frame.columnconfigure(6, weight=0)
+        premium_frame.columnconfigure(7, weight=0)
+        premium_frame.columnconfigure(8, weight=0)
+        premium_frame.columnconfigure(9, weight=0)
+
         summary_frame = ttk.Frame(root, style="TealCard.TFrame", padding=(16, 14))
         summary_frame.pack(fill="x", pady=(0, 12))
         ttk.Label(summary_frame, textvariable=self.summary_var, wraplength=1480, justify="left", style="Summary.TLabel").pack(anchor="w")
@@ -332,6 +389,7 @@ class ScriptoriumApp(tk.Tk):
             "year",
             "authors",
             "title",
+            "tags",
             "duplicate_status",
             "planned_destination",
         )
@@ -343,6 +401,7 @@ class ScriptoriumApp(tk.Tk):
         self.tree.heading("year", text="Year")
         self.tree.heading("authors", text="Author")
         self.tree.heading("title", text="Title")
+        self.tree.heading("tags", text="Tags")
         self.tree.heading("duplicate_status", text="Duplicate")
         self.tree.heading("planned_destination", text="Proposed destination")
 
@@ -352,9 +411,10 @@ class ScriptoriumApp(tk.Tk):
         self.tree.column("language", width=58, stretch=False, anchor="center")
         self.tree.column("year", width=62, stretch=False, anchor="center")
         self.tree.column("authors", width=180, stretch=False)
-        self.tree.column("title", width=360, stretch=True)
+        self.tree.column("title", width=310, stretch=True)
+        self.tree.column("tags", width=220, stretch=False)
         self.tree.column("duplicate_status", width=128, stretch=False)
-        self.tree.column("planned_destination", width=520, stretch=True)
+        self.tree.column("planned_destination", width=430, stretch=True)
 
         y_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         x_scroll = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
@@ -365,21 +425,24 @@ class ScriptoriumApp(tk.Tk):
         table_frame.rowconfigure(0, weight=1)
         table_frame.columnconfigure(0, weight=1)
 
-        self.tree.tag_configure("UNCLEAR", background="#FBF6E8")
-        self.tree.tag_configure("SCHOLAR", background="#EEF8F9")
-        self.tree.tag_configure("PERSONAL_ADMIN", background="#FCEBF1")
-        self.tree.tag_configure("PROFESSIONAL", background="#EEE7F8")
-        self.tree.tag_configure("CREATIVE", background="#F6ECFB")
-        self.tree.tag_configure("duplicate_exact", background="#F7D8E2")
-        self.tree.tag_configure("duplicate_probable", background="#F3E2B8")
+        self.tree.tag_configure("UNCLEAR", background="#F7EBDD")
+        self.tree.tag_configure("SCHOLAR", background="#EEE3D3")
+        self.tree.tag_configure("PERSONAL_ADMIN", background="#F5DED2")
+        self.tree.tag_configure("PROFESSIONAL", background="#E8DED1")
+        self.tree.tag_configure("CREATIVE", background="#F1E2D4")
+        self.tree.tag_configure("duplicate_exact", background="#F1D1C4")
+        self.tree.tag_configure("duplicate_probable", background="#E8D8AE")
 
         notebook = ttk.Notebook(root)
         notebook.pack(fill="both", expand=False, pady=(12, 0))
+        self.notebook = notebook
 
         summary_text_frame = ttk.Frame(notebook)
         log_frame = ttk.Frame(notebook)
+        lotus_frame = ttk.Frame(notebook)
         notebook.add(summary_text_frame, text="Report Summary")
         notebook.add(log_frame, text="Activity")
+        notebook.add(lotus_frame, text="LOTUS")
 
         self.report_text = tk.Text(
             summary_text_frame,
@@ -411,6 +474,51 @@ class ScriptoriumApp(tk.Tk):
         self.log_text.pack(fill="both", expand=True)
         self.log_text.configure(state="disabled")
 
+        lotus_toolbar = ttk.Frame(lotus_frame, style="Toolbar.TFrame", padding=(12, 10))
+        lotus_toolbar.pack(fill="x")
+        ttk.Label(
+            lotus_toolbar,
+            text="LOTUS keeps Agency-uploaded markdown and text files in a creative-meaning workspace.",
+            style="WarmMuted.TLabel",
+            justify="left",
+        ).grid(row=0, column=0, columnspan=5, sticky="w")
+        ttk.Button(lotus_toolbar, text="Upload to LOTUS", style="GoldAction.TButton", command=self.upload_lotus_files).grid(
+            row=1, column=0, padx=(0, 8), pady=(8, 0), sticky="w"
+        )
+        ttk.Button(lotus_toolbar, text="Refresh LOTUS", style="Utility.TButton", command=self.refresh_lotus_library).grid(
+            row=1, column=1, padx=(0, 8), pady=(8, 0), sticky="w"
+        )
+        ttk.Button(lotus_toolbar, text="Use LOTUS as Source", style="Utility.TButton", command=self.use_lotus_sources).grid(
+            row=1, column=2, padx=(0, 8), pady=(8, 0), sticky="w"
+        )
+        ttk.Button(lotus_toolbar, text="Scan Selected", style="Scan.TButton", command=self.scan_selected_lotus).grid(
+            row=1, column=3, padx=(0, 8), pady=(8, 0), sticky="w"
+        )
+        ttk.Label(lotus_toolbar, textvariable=self.lotus_status_var, style="Section.TLabel").grid(
+            row=1, column=4, sticky="e", pady=(8, 0)
+        )
+        lotus_toolbar.columnconfigure(4, weight=1)
+
+        lotus_table_frame = ttk.Frame(lotus_frame, style="Card.TFrame", padding=(10, 10, 10, 6))
+        lotus_table_frame.pack(fill="both", expand=True)
+        lotus_columns = ("name", "extension", "modified", "size_kb")
+        self.lotus_tree = ttk.Treeview(lotus_table_frame, columns=lotus_columns, show="headings", height=8)
+        self.lotus_tree.heading("name", text="LOTUS file")
+        self.lotus_tree.heading("extension", text="Kind")
+        self.lotus_tree.heading("modified", text="Modified")
+        self.lotus_tree.heading("size_kb", text="KB")
+        self.lotus_tree.column("name", width=620, stretch=True)
+        self.lotus_tree.column("extension", width=90, stretch=False, anchor="center")
+        self.lotus_tree.column("modified", width=140, stretch=False)
+        self.lotus_tree.column("size_kb", width=90, stretch=False, anchor="e")
+        lotus_scroll = ttk.Scrollbar(lotus_table_frame, orient="vertical", command=self.lotus_tree.yview)
+        self.lotus_tree.configure(yscrollcommand=lotus_scroll.set)
+        self.lotus_tree.grid(row=0, column=0, sticky="nsew")
+        lotus_scroll.grid(row=0, column=1, sticky="ns")
+        lotus_table_frame.rowconfigure(0, weight=1)
+        lotus_table_frame.columnconfigure(0, weight=1)
+        self.refresh_lotus_library()
+
     def choose_folder(self) -> None:
         chosen = filedialog.askdirectory(title="Choose a folder to scan")
         if not chosen:
@@ -422,10 +530,10 @@ class ScriptoriumApp(tk.Tk):
         chosen = filedialog.askopenfilenames(
             title="Choose files to scan",
             filetypes=[
-                ("Supported documents", "*.pdf *.docx *.doc *.txt"),
+                ("Supported documents", "*.pdf *.docx *.doc *.txt *.md"),
                 ("PDF files", "*.pdf"),
                 ("Word documents", "*.docx *.doc"),
-                ("Text files", "*.txt"),
+                ("Text and Markdown", "*.txt *.md"),
                 ("All files", "*.*"),
             ],
         )
@@ -433,6 +541,87 @@ class ScriptoriumApp(tk.Tk):
             return
         self.current_sources = [Path(path).resolve() for path in chosen]
         self.source_var.set(paths_to_text(self.current_sources))
+
+    def _ensure_lotus_root(self) -> Path:
+        self.lotus_root.mkdir(parents=True, exist_ok=True)
+        return self.lotus_root
+
+    def _discover_lotus_files(self) -> list[Path]:
+        root = self._ensure_lotus_root()
+        return sorted(
+            [path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in {".md", ".txt"}],
+            key=lambda path: (path.suffix.lower(), path.name.lower()),
+        )
+
+    def _selected_lotus_paths(self) -> list[Path]:
+        selected: list[Path] = []
+        for item in self.lotus_tree.selection():
+            raw_path = self.lotus_tree.item(item, "values")[0]
+            candidate = self.lotus_root / raw_path
+            if candidate.exists():
+                selected.append(candidate.resolve())
+        return selected
+
+    def refresh_lotus_library(self) -> None:
+        for item in self.lotus_tree.get_children():
+            self.lotus_tree.delete(item)
+        files = self._discover_lotus_files()
+        for path in files:
+            stat = path.stat()
+            relative_name = str(path.relative_to(self.lotus_root))
+            modified = dt.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+            size_kb = f"{max(1, stat.st_size // 1024)}"
+            self.lotus_tree.insert("", "end", values=(relative_name, path.suffix.lower(), modified, size_kb))
+        self.lotus_status_var.set(
+            f"LOTUS contains {len(files)} Agency file(s). Markdown and text here can feed the main sorter."
+        )
+
+    def upload_lotus_files(self) -> None:
+        chosen = filedialog.askopenfilenames(
+            title="Upload markdown or text files to LOTUS",
+            filetypes=[("LOTUS files", "*.md *.txt"), ("Markdown files", "*.md"), ("Text files", "*.txt")],
+        )
+        if not chosen:
+            return
+        lotus_root = self._ensure_lotus_root()
+        imported = 0
+        for raw_path in chosen:
+            source = Path(raw_path).resolve()
+            destination = lotus_root / source.name
+            counter = 2
+            while destination.exists():
+                destination = lotus_root / f"{source.stem} [{counter}]{source.suffix}"
+                counter += 1
+            shutil.copy2(source, destination)
+            imported += 1
+        self.refresh_lotus_library()
+        self.summary_var.set(f"LOTUS uploaded {imported} file(s).")
+        self.status_var.set("LOTUS upload complete.")
+        self._append_log(f"LOTUS uploaded {imported} Agency markdown/text file(s).")
+
+    def use_lotus_sources(self) -> None:
+        lotus_root = self._ensure_lotus_root()
+        self.current_sources = [lotus_root]
+        self.source_var.set(paths_to_text(self.current_sources))
+        self.summary_var.set("LOTUS is loaded as the current source. Click Scan to review the uploaded notes.")
+        self.status_var.set("LOTUS source loaded.")
+
+    def scan_selected_lotus(self) -> None:
+        selected = self._selected_lotus_paths()
+        if not selected:
+            messagebox.showinfo("Scriptorium.v3", "Select at least one LOTUS markdown or text file first.")
+            return
+        self.current_sources = selected
+        self.source_var.set(paths_to_text(self.current_sources))
+        self.start_scan()
+
+    def choose_rules_file(self) -> None:
+        chosen = filedialog.askopenfilename(
+            title="Choose a rules file",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if chosen:
+            self.rules_var.set(str(Path(chosen).resolve()))
 
     def use_default_sources(self) -> None:
         self.current_sources = sorter.choose_sources(self.script_dir, [])
@@ -476,6 +665,28 @@ class ScriptoriumApp(tk.Tk):
         self._append_log(f"Applying plan in {mode} mode.")
         threading.Thread(target=self._sort_worker, args=(mode,), daemon=True).start()
 
+    def start_search(self) -> None:
+        if not self.current_records:
+            messagebox.showinfo("Scriptorium.v3", "Scan files first so there is something to search.")
+            return
+        query = self.search_var.get().strip()
+        if not query:
+            self._refresh_tree(self.current_records)
+            self.summary_var.set("Search cleared. Showing the full proposed plan.")
+            return
+        matches = sorter.search_records(self.current_records, query)
+        records = [record for record, _score in matches]
+        self._refresh_tree(records)
+        self.summary_var.set(f"Semantic search found {len(records)} result(s) for: {query}")
+        self.status_var.set("Semantic search complete.")
+
+    def clear_search(self) -> None:
+        self.search_var.set("")
+        if self.current_records:
+            self._refresh_tree(self.current_records)
+            self.summary_var.set("Showing the full proposed plan.")
+            self.status_var.set("Search cleared.")
+
     def start_cross_reference(self) -> None:
         if self.busy:
             return
@@ -500,11 +711,75 @@ class ScriptoriumApp(tk.Tk):
         self._append_log("Rendering masterlist.")
         threading.Thread(target=self._masterlist_worker, daemon=True).start()
 
+    def start_undo_last_sort(self) -> None:
+        if self.busy:
+            return
+        if not self.last_applied_actions:
+            messagebox.showinfo("Scriptorium.v3", "There is no completed sort action to undo yet.")
+            return
+        confirmed = messagebox.askyesno("Scriptorium.v3", "Undo the last completed sort action?")
+        if not confirmed:
+            return
+        self._set_busy(True)
+        self.summary_var.set("Undoing the last sort action...")
+        self.status_var.set("Undo in progress.")
+        self._append_log("Undoing the last sort action.")
+        threading.Thread(target=self._undo_worker, daemon=True).start()
+
+    def toggle_monitoring(self) -> None:
+        if self.busy:
+            return
+        self.monitor_enabled = not self.monitor_enabled
+        if self.monitor_enabled:
+            self.monitor_snapshot = self._source_snapshot()
+            self.status_var.set("Real-time monitoring enabled.")
+            self._append_log("Real-time monitoring enabled.")
+            self.after(DEFAULT_MONITOR_INTERVAL_MS, self._monitor_tick)
+        else:
+            self.status_var.set("Real-time monitoring stopped.")
+            self._append_log("Real-time monitoring stopped.")
+        self._sync_action_states()
+
     def _resolve_sources(self) -> list[Path]:
         parsed = parse_input_paths(self.source_var.get())
         if parsed:
             return parsed
         return sorter.choose_sources(self.script_dir, [])
+
+    def _resolve_rules(self) -> Path | None:
+        raw = self.rules_var.get().strip()
+        if not raw:
+            return None
+        candidate = Path(raw).expanduser()
+        return candidate.resolve() if candidate.exists() else None
+
+    def _source_snapshot(self) -> tuple[int, int, int]:
+        sources = self._resolve_sources()
+        discovered = sorter.discover_files(sources, recursive=True, limit=None)
+        count = 0
+        total_size = 0
+        latest_mtime = 0
+        for _source_root, source_path in discovered:
+            stat = source_path.stat()
+            count += 1
+            total_size += stat.st_size
+            latest_mtime = max(latest_mtime, int(stat.st_mtime))
+        return count, total_size, latest_mtime
+
+    def _monitor_tick(self) -> None:
+        if not self.monitor_enabled:
+            return
+        try:
+            snapshot = self._source_snapshot()
+            if self.monitor_snapshot is not None and snapshot != self.monitor_snapshot and not self.busy:
+                self.monitor_snapshot = snapshot
+                self._append_log("Folder change detected. Auto-scanning watched sources.")
+                self.start_scan()
+            else:
+                self.monitor_snapshot = snapshot
+        except Exception as exc:
+            self._append_log(f"monitor_error: {exc}")
+        self.after(DEFAULT_MONITOR_INTERVAL_MS, self._monitor_tick)
 
     def _on_sort_settings_changed(self, *_args: object) -> None:
         if self.current_records:
@@ -513,6 +788,7 @@ class ScriptoriumApp(tk.Tk):
     def _scan_worker(self, sources: list[Path]) -> None:
         try:
             run_id = sorter.timestamp()
+            rules = sorter.load_plain_english_rules(self._resolve_rules())
             records = sorter.scan_documents(
                 source_roots=sources,
                 max_pages=5,
@@ -521,6 +797,7 @@ class ScriptoriumApp(tk.Tk):
                 limit=None,
                 identities=self.identities,
                 script_dir=self.script_dir,
+                rules=rules,
                 progress_callback=lambda message: self.worker_queue.put(("progress", message)),
             )
             sorter.mark_duplicates(records, similar_dedupe=True)
@@ -608,6 +885,22 @@ class ScriptoriumApp(tk.Tk):
         except Exception:
             self.worker_queue.put(("error", traceback.format_exc()))
 
+    def _undo_worker(self) -> None:
+        undone = 0
+        for action, source_path, destination in reversed(self.last_applied_actions):
+            try:
+                if action == "COPIED" and destination.exists():
+                    destination.unlink()
+                    undone += 1
+                elif action == "MOVED" and destination.exists():
+                    source_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(destination), str(source_path))
+                    undone += 1
+            except Exception as exc:
+                self.worker_queue.put(("error", traceback.format_exc()))
+                return
+        self.worker_queue.put(("undo_complete", {"undone": undone}))
+
     def _poll_worker_queue(self) -> None:
         try:
             while True:
@@ -623,6 +916,8 @@ class ScriptoriumApp(tk.Tk):
                     self._finish_cross_reference(payload)
                 elif event == "masterlist_complete":
                     self._finish_masterlist(payload)
+                elif event == "undo_complete":
+                    self._finish_undo(payload)
                 elif event == "error":
                     self._set_busy(False)
                     self.status_var.set("A processing error occurred.")
@@ -638,12 +933,13 @@ class ScriptoriumApp(tk.Tk):
             return
         self.latest_run_id = str(payload["run_id"])
         self.current_records = records
+        self.last_applied_actions = []
         self.latest_report_paths = {
             "csv": payload["csv_path"],
             "json": payload["json_path"],
             "summary": payload["summary_path"],
         }
-        self._refresh_tree(records)
+        self._refresh_tree(self._current_display_records())
         summary = self._build_summary_text(
             records,
             run_id=str(payload["run_id"]),
@@ -657,6 +953,7 @@ class ScriptoriumApp(tk.Tk):
         )
         self.status_var.set(f"Scan complete. {len(records)} document(s) evaluated.")
         self._set_report_text(summary)
+        self.monitor_snapshot = self._source_snapshot()
         self._set_busy(False)
 
     def _finish_sort(self, payload: dict[str, object]) -> None:
@@ -669,7 +966,12 @@ class ScriptoriumApp(tk.Tk):
             "json": payload["json_path"],
             "summary": payload["summary_path"],
         }
-        self._refresh_tree(records)
+        self.last_applied_actions = [
+            (record.action, record.source_path, record.planned_destination)
+            for record in records
+            if record.action in {"COPIED", "MOVED"} and record.planned_destination is not None
+        ]
+        self._refresh_tree(self._current_display_records())
         summary = self._build_summary_text(
             records,
             run_id=str(payload["run_id"]),
@@ -678,8 +980,9 @@ class ScriptoriumApp(tk.Tk):
             json_path=Path(payload["json_path"]),
             mode=str(payload["mode"]),
         )
+        undo_note = " Undo Last Sort is available." if self.last_applied_actions else ""
         self.summary_var.set(
-            f"Sort complete. Files were processed in {payload['mode']} mode and the reports were updated."
+            f"Sort complete. Files were processed in {payload['mode']} mode and the reports were updated.{undo_note}"
         )
         self.status_var.set("Sorting complete.")
         self._set_report_text(summary)
@@ -717,6 +1020,21 @@ class ScriptoriumApp(tk.Tk):
         self._set_report_text(viewer_text)
         self._set_busy(False)
 
+    def _finish_undo(self, payload: dict[str, object]) -> None:
+        undone = int(payload.get("undone", 0))
+        self.last_applied_actions = []
+        for record in self.current_records:
+            if record.action == "COPIED":
+                record.action = "UNDO_COPIED"
+            elif record.action == "MOVED":
+                record.action = "UNDO_MOVED"
+        self._refresh_tree(self._current_display_records())
+        self.monitor_snapshot = self._source_snapshot()
+        self.summary_var.set(f"Undo complete. Reverted {undone} action(s).")
+        self.status_var.set("Undo complete.")
+        self._append_log(f"Undo complete: {undone} action(s) reverted.")
+        self._set_busy(False)
+
     def _build_summary_text(
         self,
         records: list[sorter.DocumentRecord],
@@ -739,9 +1057,14 @@ class ScriptoriumApp(tk.Tk):
             f"Kept: {duplicates.get('keep', 0)}",
             f"Exact duplicates: {duplicates.get('duplicate_exact', 0)}",
             f"Probable duplicates: {duplicates.get('duplicate_probable', 0)}",
+            f"Tagged records: {sum(1 for record in records if record.tags)}",
+            f"Rule matches: {sum(len(record.matched_rules) for record in records)}",
             "",
             "By category:",
         ]
+        rules_path = self._resolve_rules()
+        if rules_path:
+            lines.extend(["", f"Rules file: {rules_path}"])
         lines.extend(f"  {key}: {value}" for key, value in sorted(categories.items()))
         lines.append("")
         lines.append("By type:")
@@ -763,6 +1086,7 @@ class ScriptoriumApp(tk.Tk):
                 record.year,
                 "; ".join(record.authors),
                 record.title,
+                "; ".join(record.tags[:6]),
                 record.duplicate_status,
                 str(record.planned_destination or ""),
             )
@@ -790,6 +1114,12 @@ class ScriptoriumApp(tk.Tk):
             return path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             return path.read_text(encoding="latin-1", errors="replace")
+
+    def _current_display_records(self) -> list[sorter.DocumentRecord]:
+        query = self.search_var.get().strip()
+        if not query:
+            return self.current_records
+        return [record for record, _score in sorter.search_records(self.current_records, query)]
 
     def _sort_records(self, records: list[sorter.DocumentRecord]) -> list[sorter.DocumentRecord]:
         sort_by = self.sort_by_var.get()
@@ -822,18 +1152,22 @@ class ScriptoriumApp(tk.Tk):
             )
         return sorted(records, key=key_func, reverse=reverse)
 
-    def _set_busy(self, busy: bool) -> None:
-        self.busy = busy
-        state = "disabled" if busy else "normal"
-        self.scan_button.configure(state=state)
-        actionable_state = state if self.current_records else "disabled"
+    def _sync_action_states(self) -> None:
+        scan_state = "disabled" if self.busy else "normal"
+        actionable_state = "normal" if self.current_records and not self.busy else "disabled"
+        undo_state = "normal" if self.last_applied_actions and not self.busy else "disabled"
+        monitor_state = "disabled" if self.busy else "normal"
+
+        self.scan_button.configure(state=scan_state)
         self.sort_button.configure(state=actionable_state)
         self.crossref_button.configure(state=actionable_state)
         self.masterlist_button.configure(state=actionable_state)
-        if not busy and self.current_records:
-            self.sort_button.configure(state="normal")
-            self.crossref_button.configure(state="normal")
-            self.masterlist_button.configure(state="normal")
+        self.undo_button.configure(state=undo_state)
+        self.monitor_button.configure(state=monitor_state, text="Stop Monitor" if self.monitor_enabled else "Start Monitor")
+
+    def _set_busy(self, busy: bool) -> None:
+        self.busy = busy
+        self._sync_action_states()
 
     def run_workflow_self_test(self) -> dict[str, object]:
         sources = self.current_sources or sorter.choose_sources(self.script_dir, [])
@@ -841,6 +1175,7 @@ class ScriptoriumApp(tk.Tk):
             raise RuntimeError("No valid source path was provided for workflow self-test.")
 
         run_id = sorter.timestamp()
+        rules = sorter.load_plain_english_rules(self._resolve_rules())
         records = sorter.scan_documents(
             source_roots=sources,
             max_pages=5,
@@ -849,6 +1184,7 @@ class ScriptoriumApp(tk.Tk):
             limit=3,
             identities=self.identities,
             script_dir=self.script_dir,
+            rules=rules,
         )
         sorter.mark_duplicates(records, similar_dedupe=True)
         sorter.plan_destinations(records, output_root=self.output_root, quarantine_root=self.quarantine_root)
@@ -892,13 +1228,24 @@ class ScriptoriumApp(tk.Tk):
         self.sort_by_var.set("Title")
         self.sort_desc_var.set(False)
         sorted_preview = self._sort_records(self.current_records)
+        search_hits = 0
+        if sorted_preview:
+            query = next((token for token in sorted_preview[0].title.split() if len(token) >= 4), sorted_preview[0].title)
+            self.search_var.set(query)
+            search_hits = len(self._current_display_records())
+            self.search_var.set("")
         return {
             "records": len(self.current_records),
             "reports": sorted(self.latest_report_paths.keys()),
             "first_title": sorted_preview[0].title if sorted_preview else "",
+            "rules_loaded": len(rules),
+            "search_hits": search_hits,
+            "lotus_files": len(self._discover_lotus_files()),
             "sort_state": str(self.sort_button["state"]),
             "crossref_state": str(self.crossref_button["state"]),
             "masterlist_state": str(self.masterlist_button["state"]),
+            "undo_state": str(self.undo_button["state"]),
+            "monitor_label": str(self.monitor_button["text"]),
         }
 
 
@@ -916,7 +1263,9 @@ def main(argv: list[str] | None = None) -> int:
             f"crossref_button={app.crossref_button['text']} "
             f"masterlist_button={app.masterlist_button['text']} "
             f"sort_options={len(SORT_BY_OPTIONS)} "
-            f"tree_columns={len(app.tree['columns'])}"
+            f"tree_columns={len(app.tree['columns'])} "
+            f"tabs={len(app.notebook.tabs())} "
+            f"lotus_root={app.lotus_root.name}"
         )
         app.destroy()
         return 0
@@ -929,6 +1278,11 @@ def main(argv: list[str] | None = None) -> int:
             f"sort_state={result['sort_state']} "
             f"crossref_state={result['crossref_state']} "
             f"masterlist_state={result['masterlist_state']} "
+            f"undo_state={result['undo_state']} "
+            f"search_hits={result['search_hits']} "
+            f"rules_loaded={result['rules_loaded']} "
+            f"lotus_files={result['lotus_files']} "
+            f"monitor_label={result['monitor_label']} "
             f"reports={','.join(result['reports'])} "
             f"first_title={result['first_title']}"
         )

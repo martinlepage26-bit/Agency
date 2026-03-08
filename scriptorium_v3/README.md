@@ -1,6 +1,6 @@
 # Scriptorium.v3
 
-Desktop document sorter and report generator for mixed research and admin archives.
+Desktop document sorter and report generator for mixed research, admin, and creative archives.
 
 Included files:
 - `document_sorter.py`: core scan, classification, dedupe, cross-reference, and masterlist engine
@@ -9,14 +9,19 @@ Included files:
 - `run_document_sorter.ps1`: PowerShell wrapper
 - `pdf_rename_sort.py`: legacy reference script retained for comparison
 - `MASTER BIBLIOGRAPHY.txt`: bibliography source used by cross-reference matching
+- `scriptorium_rules.example.txt`: plain-English rules examples
+- `SCRIPTORIUM_PREMIUM_SPEC.md`: premium roadmap and capability notes
+- `LOTUS_UPLOADS/README.lotus`: placeholder for local LOTUS uploads
 
 Main functions:
-- Scan PDFs, DOCX, DOC, and TXT files
+- Scan PDFs, DOCX, DOC, TXT, and Markdown files
 - Extract title, author, date, DOI, ISBN, language, and document type
 - Detect exact and probable duplicates
 - Preview proposed destinations before sorting
 - Render cross-reference reports
 - Render masterlists
+- Semantic local search, rules, monitor scaffold, and undo support
+- LOTUS tab for Agency markdown/text uploads and creative-meaning notes
 
 Windows quick start:
 
@@ -35,4 +40,5 @@ cd .\scriptorium_v3
 
 Notes:
 - OCR support depends on `ocrmypdf` being installed and available.
+- LOTUS uploads are local workspace content and are intentionally not versioned except for the placeholder file.
 - Runtime output folders such as `REPORTS_V2`, `SORTED_LIBRARY_V2`, and `QUARANTINE` are intentionally ignored in git.

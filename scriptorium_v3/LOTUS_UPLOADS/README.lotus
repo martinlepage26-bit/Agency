@@ -1,0 +1,9 @@
+LOTUS Uploads
+
+Place Agency markdown and text files here, or use the LOTUS tab in Scriptorium.v3 to upload them.
+
+Supported LOTUS note types:
+- .md
+- .txt
+
+Scriptorium.v3 can scan this folder directly and treat LOTUS files as creative-meaning inputs.

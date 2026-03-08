@@ -29,7 +29,7 @@ except Exception:
     pass
 
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md"}
 DEFAULT_SOURCE_DIRS = ("INBOX", "LEGACY_INBOX")
 DEFAULT_OUTPUT_DIR = "SORTED_LIBRARY_V2"
 DEFAULT_QUARANTINE_DIR = "QUARANTINE/V2"
@@ -74,6 +74,7 @@ REFERENCE_STOPWORDS = {
     "report",
     "chapter",
 }
+RULES_EXAMPLE_NAME = "scriptorium_rules.example.txt"
 REVISION_SENSITIVE_TYPES = {
     "cover_letter",
     "job_application",
@@ -480,6 +481,9 @@ class DocumentRecord:
     duplicate_status: str = "keep"
     duplicate_reason: str = ""
     duplicate_group: str = ""
+    tags: list[str] = field(default_factory=list)
+    matched_rules: list[str] = field(default_factory=list)
+    filename_template: str = ""
     planned_destination: Path | None = None
     action: str = "SCANNED"
 
@@ -500,6 +504,10 @@ class DocumentRecord:
         return parts[-1] if parts else ""
 
     def filename_stub(self) -> str:
+        if self.filename_template:
+            rendered = render_filename_template(self, self.filename_template)
+            if rendered:
+                return sanitize_filename_component(rendered, max_len=140)
         year_part = self.year or "Undated"
         author_part = sanitize_filename_component(self.author_key or self.primary_author or "UnknownAuthor", max_len=28)
         title_part = sanitize_filename_component(self.title or fallback_title_from_filename(self.source_path), max_len=90)
@@ -539,6 +547,9 @@ class DocumentRecord:
             "duplicate_status": self.duplicate_status,
             "duplicate_reason": self.duplicate_reason,
             "duplicate_group": self.duplicate_group,
+            "tags": "; ".join(self.tags),
+            "matched_rules": "; ".join(self.matched_rules),
+            "filename_template": self.filename_template,
             "planned_destination": str(self.planned_destination or ""),
             "action": self.action,
             "meta_title": self.extraction.meta_title,
@@ -548,6 +559,17 @@ class DocumentRecord:
             "ocr_used": str(self.extraction.ocr_used),
             "reasoning": "; ".join(self.reasoning + self.extraction.notes),
         }
+
+
+@dataclass
+class PlainEnglishRule:
+    raw_line: str
+    action: str
+    phrase: str
+    category: str = ""
+    doc_type: str = ""
+    tags: list[str] = field(default_factory=list)
+    template: str = ""
 
 
 def normalize_for_match(text: str) -> str:
@@ -595,6 +617,70 @@ def significant_tokens(text: str) -> set[str]:
     }
 
 
+def record_match_text(record: DocumentRecord) -> str:
+    return normalize_compact(
+        "\n".join(
+            [
+                record.title,
+                fallback_title_from_filename(record.source_path),
+                " ".join(record.authors),
+                " ".join(record.tags),
+                record.doc_type,
+                record.category,
+                record.extraction.meta_title,
+                record.extraction.meta_subject,
+                record.extraction.meta_keywords,
+                record.extraction.raw_text[:12000],
+            ]
+        )
+    )
+
+
+def semantic_search_score(record: DocumentRecord, query: str) -> int:
+    query = query.strip()
+    if not query:
+        return 0
+    compact_query = normalize_compact(query)
+    query_tokens = significant_tokens(query)
+    if not compact_query and not query_tokens:
+        return 0
+
+    title_compact = normalize_compact(record.title)
+    author_compact = normalize_compact(" ".join(record.authors))
+    tag_compact = normalize_compact(" ".join(record.tags))
+    match_text = record_match_text(record)
+    match_tokens = significant_tokens(match_text)
+
+    score = 0
+    if compact_query and compact_query in title_compact:
+        score += 18
+    if compact_query and compact_query in author_compact:
+        score += 12
+    if compact_query and compact_query in tag_compact:
+        score += 10
+    if compact_query and compact_query in match_text:
+        score += 8
+
+    shared = query_tokens & match_tokens
+    score += min(len(shared) * 4, 24)
+
+    if record.year and record.year in query:
+        score += 4
+    if record.language and record.language in compact_query:
+        score += 3
+    if normalize_compact(record.category) in compact_query or normalize_compact(record.doc_type) in compact_query:
+        score += 6
+    return score
+
+
+def search_records(records: list[DocumentRecord], query: str) -> list[tuple[DocumentRecord, int]]:
+    scored = [(record, semantic_search_score(record, query)) for record in records]
+    return sorted(
+        [(record, score) for record, score in scored if score > 0],
+        key=lambda item: (-item[1], item[0].title.lower(), item[0].relative_source.lower()),
+    )
+
+
 def clean_candidate_text(value: str) -> str:
     value = re.sub(r"\s+", " ", value or "").strip(" |-_")
     value = re.sub(r"^\d{1,4}\s+(?=[A-Za-zÀ-ÿ])", "", value)
@@ -613,6 +699,155 @@ def normalize_author_case(value: str) -> str:
         else:
             words.append(word)
     return "".join(words)
+
+
+def generate_tags(record: DocumentRecord) -> list[str]:
+    tags: list[str] = []
+    for value in (record.category, record.doc_type, record.language):
+        if value and value not in {"UNCLEAR", "unclear", "unknown"}:
+            tags.append(normalize_compact(value).replace(" ", "_"))
+    if record.year:
+        tags.append(record.year)
+    if record.doi:
+        tags.append("has_doi")
+    if record.isbn:
+        tags.append("has_isbn")
+    if record.duplicate_status != "keep":
+        tags.append(record.duplicate_status)
+    if record.extraction.ocr_used:
+        tags.append("ocr")
+    if record.primary_author:
+        tags.append(sanitize_filename_component(record.primary_author, max_len=32).replace(" ", "_").lower())
+
+    topical = significant_tokens(
+        " ".join(
+            [
+                record.title,
+                record.extraction.meta_subject,
+                record.extraction.meta_keywords,
+                record.extraction.raw_text[:4000],
+            ]
+        )
+    )
+    for token in sorted(topical)[:8]:
+        if token not in {"abstract", "references", "introduction", "chapter"}:
+            tags.append(token)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        tag = tag.strip().replace(" ", "_")
+        if tag and tag not in seen:
+            seen.add(tag)
+            deduped.append(tag)
+    return deduped[:16]
+
+
+def render_filename_template(record: DocumentRecord, template: str) -> str:
+    mapping = {
+        "year": record.year or "Undated",
+        "author": record.author_key or sanitize_filename_component(record.primary_author or "UnknownAuthor", max_len=32),
+        "title": sanitize_filename_component(record.title or fallback_title_from_filename(record.source_path), max_len=90),
+        "doc_type": record.doc_type,
+        "category": record.category,
+        "language": record.language,
+    }
+    rendered = template
+    for key, value in mapping.items():
+        rendered = rendered.replace(f"{{{key}}}", value)
+    return rendered
+
+
+def parse_plain_english_rule(line: str) -> PlainEnglishRule | None:
+    text = line.strip()
+    if not text or text.startswith("#"):
+        return None
+
+    move_match = re.match(
+        r'^move all files containing "([^"]+)" to ([A-Za-z0-9_]+)(?:/([A-Za-z0-9_]+))?$',
+        text,
+        flags=re.IGNORECASE,
+    )
+    if move_match:
+        category = move_match.group(2) or ""
+        doc_type = move_match.group(3) or ""
+        return PlainEnglishRule(
+            raw_line=text,
+            action="move",
+            phrase=move_match.group(1),
+            category=category.upper() if category else "",
+            doc_type=doc_type.lower() if doc_type else "",
+        )
+
+    tag_match = re.match(
+        r'^tag all files containing "([^"]+)" with ([A-Za-z0-9_, -]+)$',
+        text,
+        flags=re.IGNORECASE,
+    )
+    if tag_match:
+        tags = [normalize_compact(tag).replace(" ", "_") for tag in tag_match.group(2).split(",") if tag.strip()]
+        return PlainEnglishRule(raw_line=text, action="tag", phrase=tag_match.group(1), tags=tags)
+
+    rename_match = re.match(
+        r'^rename all files containing "([^"]+)" as (.+)$',
+        text,
+        flags=re.IGNORECASE,
+    )
+    if rename_match:
+        return PlainEnglishRule(
+            raw_line=text,
+            action="rename",
+            phrase=rename_match.group(1),
+            template=rename_match.group(2).strip(),
+        )
+    return None
+
+
+def load_plain_english_rules(path: Path | None) -> list[PlainEnglishRule]:
+    if path is None or not path.exists():
+        return []
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        content = path.read_text(encoding="latin-1", errors="replace")
+    rules: list[PlainEnglishRule] = []
+    for line in content.splitlines():
+        rule = parse_plain_english_rule(line)
+        if rule:
+            rules.append(rule)
+    return rules
+
+
+def apply_plain_english_rules(records: list[DocumentRecord], rules: list[PlainEnglishRule]) -> None:
+    if not rules:
+        return
+    for record in records:
+        compact_text = record_match_text(record)
+        for rule in rules:
+            if not contains_compact_phrase(compact_text, rule.phrase):
+                continue
+            record.matched_rules.append(rule.raw_line)
+            if rule.action == "move":
+                if rule.category:
+                    record.category = rule.category
+                if rule.doc_type:
+                    record.doc_type = rule.doc_type
+                record.type_confidence = max(record.type_confidence, 95)
+                record.reasoning.append(f"rule_move:{rule.phrase}")
+            elif rule.action == "tag":
+                record.tags.extend(rule.tags)
+                record.reasoning.append(f"rule_tag:{rule.phrase}")
+            elif rule.action == "rename":
+                record.filename_template = rule.template
+                record.reasoning.append(f"rule_rename:{rule.phrase}")
+        if record.tags:
+            deduped: list[str] = []
+            seen: set[str] = set()
+            for tag in record.tags:
+                if tag and tag not in seen:
+                    seen.add(tag)
+                    deduped.append(tag)
+            record.tags = deduped[:20]
 
 
 def ensure_unique_path(path: Path, used_paths: set[Path]) -> Path:
@@ -825,6 +1060,67 @@ def extract_doc_binary_text(path: Path) -> ExtractionResult:
     return result
 
 
+def normalize_markdown_text(text: str) -> str:
+    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"^\s{0,3}#+\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*>\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\|", " ", text)
+    cleaned_lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
+    return "\n".join(line for line in cleaned_lines if line)
+
+
+def extract_markdown_text(path: Path) -> ExtractionResult:
+    result = ExtractionResult()
+    text = read_text_file(path)
+    body = text
+    lines = text.splitlines()
+
+    if lines and lines[0].strip() == "---":
+        front_matter: list[str] = []
+        for index, line in enumerate(lines[1:40], start=1):
+            if line.strip() == "---":
+                body = "\n".join(lines[index + 1 :])
+                break
+            front_matter.append(line)
+        for line in front_matter:
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            key = normalize_for_match(key)
+            value = value.strip().strip('"').strip("'")
+            if not value:
+                continue
+            if key == "title":
+                result.meta_title = clean_candidate_text(value)
+            elif key in {"author", "authors", "creator"}:
+                result.meta_author = clean_candidate_text(value)
+            elif key in {"date", "created", "published"}:
+                result.created = value[:10]
+            elif key in {"tags", "keywords", "category", "categories"}:
+                result.meta_keywords = clean_candidate_text(value)
+            elif key in {"summary", "description", "abstract"}:
+                result.meta_subject = clean_candidate_text(value)
+
+    if not result.meta_title:
+        for line in body.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("#"):
+                result.meta_title = clean_candidate_text(re.sub(r"^#+\s*", "", stripped))
+                break
+
+    cleaned = normalize_markdown_text(body)
+    result.raw_text = cleaned
+    result.text_preview = cleaned[:12000]
+    return result
+
+
 def extract_by_extension(path: Path, max_pages: int, ocr_mode: str, script_dir: Path) -> ExtractionResult:
     suffix = path.suffix.lower()
     if suffix == ".pdf":
@@ -841,6 +1137,8 @@ def extract_by_extension(path: Path, max_pages: int, ocr_mode: str, script_dir: 
     if suffix == ".txt":
         text = read_text_file(path)
         return ExtractionResult(raw_text=text, text_preview=text[:12000])
+    if suffix == ".md":
+        return extract_markdown_text(path)
     return ExtractionResult()
 
 
@@ -1699,6 +1997,7 @@ def scan_documents(
     limit: int | None,
     identities: list[str],
     script_dir: Path,
+    rules: list[PlainEnglishRule] | None = None,
     progress_callback: Callable[[str], None] | None = None,
 ) -> list[DocumentRecord]:
     records: list[DocumentRecord] = []
@@ -1723,12 +2022,20 @@ def scan_documents(
         isbn_match = ISBN_RE.search("\n".join([record.title, extraction.raw_text[:12000], fallback_title_from_filename(source_path)]))
         record.isbn = isbn_match.group(0) if isbn_match else ""
         record.doc_type, record.category, record.type_confidence, record.reasoning = classify_document(record, identities=identities)
+        record.tags = generate_tags(record)
         records.append(record)
         message = f"[SCAN] {record.relative_source} -> {record.category}/{record.doc_type}"
         if progress_callback:
             progress_callback(message)
         else:
             print(message, flush=True)
+    if rules:
+        apply_plain_english_rules(records, rules)
+        for record in records:
+            generated = generate_tags(record)
+            for tag in generated:
+                if tag not in record.tags:
+                    record.tags.append(tag)
     return records
 
 
@@ -1798,6 +2105,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-recursive", action="store_true", help="Only scan the top level of each source.")
     parser.add_argument("--render-crossref", action="store_true", help="Also render a cross-reference report.")
     parser.add_argument("--render-masterlist", action="store_true", help="Also render a masterlist report.")
+    parser.add_argument("--rules-file", help="Optional plain-English rules file.")
     parser.add_argument(
         "--identity",
         action="append",
@@ -1824,6 +2132,9 @@ def main() -> int:
     )
     report_root = Path(args.report_root).expanduser().resolve() if args.report_root else (script_dir / DEFAULT_REPORT_DIR).resolve()
     bibliography_path = (script_dir / "MASTER BIBLIOGRAPHY.txt").resolve()
+    default_rules_path = (script_dir / RULES_EXAMPLE_NAME).resolve()
+    rules_path = Path(args.rules_file).expanduser().resolve() if args.rules_file else (default_rules_path if default_rules_path.exists() else None)
+    rules = load_plain_english_rules(rules_path)
     identities = DEFAULT_IDENTITIES + args.identity
 
     run_id = timestamp()
@@ -1835,6 +2146,8 @@ def main() -> int:
     print(f"Output root: {output_root}")
     print(f"Quarantine root: {quarantine_root}")
     print(f"Report root: {report_root}")
+    if rules_path and rules:
+        print(f"Rules file: {rules_path} ({len(rules)} rules)")
 
     records = scan_documents(
         source_roots=sources,
@@ -1844,6 +2157,7 @@ def main() -> int:
         limit=args.limit,
         identities=identities,
         script_dir=script_dir,
+        rules=rules,
     )
 
     mark_duplicates(records, similar_dedupe=not args.no_similar_dedupe)
