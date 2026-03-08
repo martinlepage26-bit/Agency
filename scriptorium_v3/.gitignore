@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+REPORTS_V2/
+SORTED_LIBRARY_V2/
+QUARANTINE/
+TEST_*/
+LOGS/
+TOOLS/
+*.pyc
