@@ -1,5 +1,0 @@
-fastapi
-uvicorn
-jsonschema
-jinja2
-pydantic

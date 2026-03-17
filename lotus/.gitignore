@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+LOTUS_UPLOADS/*
+!LOTUS_UPLOADS/README.lotus

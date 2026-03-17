@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "flowerapp"
 version = "1.0.0"
+description = "Lotus scoring assistant (legacy package name: flowerapp)"
 dependencies = [
     "fastapi",
     "uvicorn",
@@ -14,4 +15,18 @@ dependencies = [
 ]
 
 [project.scripts]
-flowerapp = "flowerapp.main:main"
+lotus = "lotus.main:main"
+flowerapp = "lotus.main:main"
+voice11 = "voice11.cli:main"
+
+[project.optional-dependencies]
+speech = [
+    "pyttsx3",
+    "pydub"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+flowerapp = ["schemas/*.json"]
