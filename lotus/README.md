@@ -1,12 +1,14 @@
-# LOTUS
+# Lotus
 
-`LOTUS` is a standalone app for scoring social agency from local notes.
+`Lotus` is a standalone app for scoring social agency from local notes.
+
+The desktop UI still styles the name as `LOTUS`, but the canonical product name is `Lotus`.
 
 This is the canonical home of the Lotus app inside the `Agency` git repo.
 
 ## Boundaries
 
-- `LOTUS` is its own app.
+- `Lotus` is its own app.
 - `Dr. Sort`, `Doc sorter`, and other document-sorting tools are separate apps.
 - `Scripto` is the canonical home for the Dr. Sort / Doc sorter app line.
 - `Scriptorium`, `Paper Builder`, and related concepts are separate app ideas.
@@ -44,4 +46,6 @@ python3 lotus_app.py
 - Lotus reads local `.md` and `.txt` notes from `LOTUS_UPLOADS/`.
 - Upload content is intentionally local workspace data and is not versioned except for the placeholder file.
 - The repo and remote remain named `Agency`; that is the git umbrella, not the app name.
+- `Agency LOTUS` is an older local alias, not a separate product.
 - The older local CLI and web engine still lives under `src/flowerapp/` for compatibility, with `src/lotus/` as the preferred Python import and CLI alias.
+- `flowerapp` is a compatibility package name only and should not be used as the public app name.

@@ -4,6 +4,8 @@ This folder is no longer the canonical home of `LOTUS`.
 
 Treat `scriptorium_v3/` as legacy mixed workspace territory for separate app ideas, including document-sorting work and older concept experiments. The standalone Lotus app now lives in `../lotus/`, and the canonical Dr. Sort / Doc sorter app now lives in `../scripto/`.
 
+`Agency` remains only the repo umbrella here. It should not be read as the current public app name for either Lotus or Scripto.
+
 ## What Belongs Here
 
 - wrapper scripts and module shims that preserve older paths for Lotus and Scripto

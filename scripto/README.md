@@ -2,10 +2,12 @@
 
 `Scripto` is the canonical home for the Dr. Sort / Doc sorter app line inside the `Agency` git repo.
 
+`Dr. Sort-Academic Helper` is the current desktop surface inside the Scripto app line.
+
 ## Boundaries
 
 - `Scripto` owns Dr. Sort, document sorting, cross-reference reporting, masterlists, and related archive-processing tools.
-- `LOTUS` is a separate app and does not belong inside the canonical Scripto code.
+- `Lotus` is a separate app and does not belong inside the canonical Scripto code.
 - `Paper Builder` is still only a concept boundary and is not yet separated into its own concrete file set.
 - `scriptorium_v3/` is now legacy compatibility territory, not the canonical Scripto source.
 
@@ -44,3 +46,4 @@ cd .\scripto
 
 - Runtime output folders such as `REPORTS_V2`, `SORTED_LIBRARY_V2`, and `QUARANTINE` are intentionally ignored in git.
 - The repo and remote remain named `Agency`; that is the umbrella git home, not the app name.
+- `Dr. Sort-Academic Helper` is the current user-facing launcher name; `Scripto` names the broader app line and folder.

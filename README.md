@@ -1,13 +1,15 @@
 # Agency
 
-Git home for `Lotus`, the social agency scoring app.
+Git home for the `Lotus` and `Scripto` app lines.
 
 ## Canonical Identity
 
 - `Agency` is the repository name and git home.
-- `Lotus` is the app name.
-- `AGENCY`, `Agency LOTUS`, `Lotus`, and `Lotus app` refer to the same project family.
-- Use `Lotus` for user-facing app surfaces.
+- `Lotus` is the social agency scoring app name.
+- `Scripto` is the archive-sorting app line; `Dr. Sort-Academic Helper` is its current desktop surface.
+- `Agency LOTUS` and `AGENCY LOTUS` are legacy aliases for `Lotus`, not separate products.
+- `flowerapp` is only a legacy Python package and CLI alias for Lotus compatibility.
+- Use `Lotus` and `Scripto` for user-facing app surfaces.
 - Use `Agency` for the repo, remote, and umbrella project reference.
 
 ## Current Structure
@@ -46,7 +48,7 @@ Git home for `Lotus`, the social agency scoring app.
 - PHAROS surfaces do not belong here long-term:
   - `CompassAI`
   - `AuroraAI`
-  - the newer PHAROS-aligned desktop export snapshot that exists only in git history / pending deletions under `desktop/pharos_governance_suite/`
+  - the removed PHAROS desktop export snapshot that now exists only in git history
 - Martin's personal and professional `governai.ca` content does not belong here.
 
 ## Compatibility Notes
@@ -56,6 +58,7 @@ Git home for `Lotus`, the social agency scoring app.
 - `src/lotus/` is the preferred Python package surface for Lotus CLI and imports.
 - `src/flowerapp/` remains only as the legacy package name for compatibility.
 - `scripto/dr_sort_academic_helper.py` and `scripto/document_sorter.py` are the canonical Scripto module names.
+- `Dr. Sort-Academic Helper` is the current desktop label inside the Scripto app line.
 - The `scriptorium_v3` folder name is retained only for legacy compatibility and other app concepts.
 - `scriptorium_v3/lotus_app.py`, `scriptorium_v3/agency_lotus_app.py`, and the old `Agency LOTUS` launch scripts remain only as compatibility shims.
 - `scriptorium_v3/dr_sort_academic_helper.py`, `scriptorium_v3/document_sorter.py`, and the old Dr. Sort launch scripts remain only as compatibility shims.
