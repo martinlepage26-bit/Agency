@@ -1,6 +1,6 @@
-# Agency LOTUS Premium Spec
+# Scripto Premium Spec
 
-`Agency LOTUS | Dr. Sort-Academic Helper` is evolving from a safe document sorter into a high-end, local-first, content-aware archive application.
+`Scripto | Dr. Sort-Academic Helper` is the premium direction for a high-end, local-first, content-aware archive application.
 
 ## Core Product Direction
 

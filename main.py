@@ -2,7 +2,7 @@ import sys
 
 def main():
     try:
-        print("Démarrage de FlowerApp...")
+        print("Demarrage de LOTUS...")
         # Your logic goes here
         print("Application logic started successfully.")
     except Exception as e:

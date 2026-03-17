@@ -12,55 +12,20 @@ param(
     [switch]$NoRecursive
 )
 
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ScriptPath = Join-Path $Root "document_sorter.py"
-$LocalPython = Join-Path $Root ".venv\Scripts\python.exe"
+$DelegateScript = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\scripto\run_document_sorter.ps1"
 
-if (Test-Path $LocalPython) {
-    $PythonCmd = $LocalPython
-}
-elseif (Get-Command py -ErrorAction SilentlyContinue) {
-    $PythonCmd = "py"
-}
-else {
-    $PythonCmd = "python"
+if (-not (Test-Path $DelegateScript)) {
+    throw "Could not find delegated Scripto runner at $DelegateScript"
 }
 
-$Args = @(
-    $ScriptPath,
-    "--mode", $Mode,
-    "--ocr", $Ocr,
-    "--max-pages", "$MaxPages",
-    "--output-root", (Join-Path $Root "SORTED_LIBRARY_V2"),
-    "--quarantine-root", (Join-Path $Root "QUARANTINE\V2"),
-    "--report-root", (Join-Path $Root "REPORTS_V2")
-)
-
-foreach ($Item in $Source) {
-    if ($Item) {
-        $Args += @("--source", $Item)
-    }
-}
-
-if ($RulesFile) {
-    $Args += @("--rules-file", $RulesFile)
-}
-
-if ($NoSimilarDedupe) {
-    $Args += "--no-similar-dedupe"
-}
-
-if ($RenderCrossReference) {
-    $Args += "--render-crossref"
-}
-
-if ($RenderMasterlist) {
-    $Args += "--render-masterlist"
-}
-
-if ($NoRecursive) {
-    $Args += "--no-recursive"
-}
-
-& $PythonCmd @Args
+& $DelegateScript `
+    -Source $Source `
+    -Mode $Mode `
+    -Ocr $Ocr `
+    -MaxPages $MaxPages `
+    -RulesFile $RulesFile `
+    -RenderCrossReference:$RenderCrossReference `
+    -RenderMasterlist:$RenderMasterlist `
+    -NoSimilarDedupe:$NoSimilarDedupe `
+    -NoRecursive:$NoRecursive
 exit $LASTEXITCODE

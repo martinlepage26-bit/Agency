@@ -1,0 +1,1 @@
+"""Standalone Scripto app package."""

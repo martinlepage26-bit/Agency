@@ -9,5 +9,3 @@ TOOLS/
 *.pyc
 INBOX/*
 !INBOX/.gitkeep
-LOTUS_UPLOADS/*
-!LOTUS_UPLOADS/README.lotus

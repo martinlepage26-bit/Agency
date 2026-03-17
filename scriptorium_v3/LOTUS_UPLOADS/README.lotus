@@ -1,9 +1,5 @@
-LOTUS Uploads
+Legacy LOTUS Uploads
 
-Place Agency markdown and text files here, or use the LOTUS tab in Agency LOTUS to upload them.
+This folder remains only for compatibility with the old mixed workspace.
 
-Supported LOTUS note types:
-- .md
-- .txt
-
-Dr. Sort-Academic Helper can scan this folder directly and treat LOTUS files as creative-meaning inputs.
+Canonical Lotus uploads now live in `../lotus/LOTUS_UPLOADS/`.

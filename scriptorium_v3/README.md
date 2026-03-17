@@ -1,67 +1,53 @@
-# Agency LOTUS / Dr. Sort-Academic Helper
+# Scriptorium v3
 
-Two connected desktop apps for premium local-first archive organization:
-- `Dr. Sort-Academic Helper`: professional file sorting, metadata extraction, renaming, dedupe, review, and reporting
-- `Agency LOTUS`: standalone note scoring workspace fed by uploads or Dr. Sort plan exports
+This folder is no longer the canonical home of `LOTUS`.
 
-Included files:
-- `document_sorter.py`: core scan, classification, dedupe, cross-reference, destination-planning, and masterlist engine
-- `dr_sort_academic_helper.py`: main professional sorter desktop app
-- `agency_lotus_core.py`: shared LOTUS note import, scoring, and Dr. Sort feed logic
-- `agency_lotus_app.py`: standalone Agency LOTUS score app
-- `Dr. Sort-Academic Helper.bat`: Windows launcher for Dr. Sort
-- `Agency LOTUS.bat`: Windows launcher for Agency LOTUS
-- `run_document_sorter.ps1`: PowerShell wrapper for scan/apply/report workflows
-- `launch_dr_sort.vbs`: quiet Windows launcher for Dr. Sort
-- `launch_agency_lotus.vbs`: quiet Windows launcher for Agency LOTUS
-- `create_agency_lotus_desktop_shortcuts.ps1`: creates separate desktop shortcuts for both apps
-- `pdf_rename_sort.py`: legacy reference script retained for comparison
-- `MASTER BIBLIOGRAPHY.txt`: bibliography source used by cross-reference matching
-- `agency_lotus_rules.example.txt`: plain-English rules examples
-- `AGENCY_LOTUS_PREMIUM_SPEC.md`: premium roadmap and capability notes
-- `agency_lotus_icon.ico`: lotus-flower desktop icon
-- `LOTUS_UPLOADS/README.lotus`: placeholder for local LOTUS uploads
+Treat `scriptorium_v3/` as legacy mixed workspace territory for separate app ideas, including document-sorting work and older concept experiments. The standalone Lotus app now lives in `../lotus/`, and the canonical Dr. Sort / Doc sorter app now lives in `../scripto/`.
 
-Dr. Sort main functions:
-- Scan PDFs, DOCX, DOC, TXT, and Markdown files
-- Extract title, author, date, DOI, ISBN, language, and document type
-- Detect exact and probable duplicates
-- Rename files contextually and plan destinations with multiple folder schemas
-- Review by confidence, duplicate state, unclear state, and other sort filters
-- Render cross-reference reports and masterlists
-- Apply plain-English rules, local semantic search, and folder monitoring scaffolding
-- Feed the current sorting plan into LOTUS as a scored note set
+## What Belongs Here
 
-Agency LOTUS main functions:
-- Upload `.md` and `.txt` files into the LOTUS workspace
-- Score notes across agency, strategy, governance, operational, creative, and meaning signals
-- Review uploaded notes separately from Dr. Sort while sharing the same LOTUS data root
-- Open as a standalone app or inside the LOTUS tab within Dr. Sort
+- wrapper scripts and module shims that preserve older paths for Lotus and Scripto
+- placeholder working folders such as `INBOX/` and `LOTUS_UPLOADS/` for older local paths
+- older concept space associated with names such as `Scriptorium` or `Paper Builder`
 
-Windows quick start:
+## Lotus Compatibility Shims
 
-```powershell
-py -m pip install pymupdf
-cd .\scriptorium_v3
-py .\dr_sort_academic_helper.py
-```
+These files remain here only so older paths do not break immediately:
 
-Standalone LOTUS quick start:
+- `lotus_app.py`
+- `lotus_core.py`
+- `agency_lotus_app.py`
+- `LOTUS.bat`
+- `launch_lotus.vbs`
+- `Agency LOTUS.bat`
+- `launch_agency_lotus.vbs`
+- `create_lotus_desktop_shortcuts.ps1`
+- `create_agency_lotus_desktop_shortcuts.ps1`
 
-```powershell
-cd .\scriptorium_v3
-py .\agency_lotus_app.py
-```
+They should be treated as wrappers that forward to the standalone Lotus app in `../lotus/`.
 
-PowerShell scan with extra reports:
+## Scripto Compatibility Shims
 
-```powershell
-cd .\scriptorium_v3
-.\run_document_sorter.ps1 -Mode scan -RenderCrossReference -RenderMasterlist
-```
+These files remain here only so older Dr. Sort paths do not break immediately:
 
-Notes:
-- The repo folder remains named `scriptorium_v3`, while the shipped desktop apps are `Agency LOTUS` and `Dr. Sort-Academic Helper`.
-- OCR support depends on `ocrmypdf` being installed and available.
-- LOTUS uploads are local workspace content and are intentionally not versioned except for the placeholder file.
-- Runtime output folders such as `REPORTS_V2`, `SORTED_LIBRARY_V2`, and `QUARANTINE` are intentionally ignored in git.
+- `dr_sort_academic_helper.py`
+- `document_sorter.py`
+- `run_document_sorter.ps1`
+- `Dr. Sort-Academic Helper.bat`
+
+They should be treated as wrappers that forward to the standalone Scripto app in `../scripto/`.
+
+## Canonical Assets Moved Out
+
+- Lotus icons and preview now live in `../lotus/`
+- Dr. Sort support assets, rules, spec, bibliography, and preview now live in `../scripto/`
+- If you need to change real app assets rather than wrappers, work in the canonical app folders instead of here
+
+## Important Boundary
+
+- `LOTUS` is not Dr. Sort.
+- `LOTUS` is not Doc sorter.
+- `LOTUS` is not Scriptorium.
+- `LOTUS` is not Paper Builder.
+
+If you are changing the Lotus app itself, work in `../lotus/`.
